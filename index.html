@@ -99,8 +99,8 @@
 </div>
 
 <script>
-// ★GASでデプロイしたウェブアプリのURLをここに貼り付けてください
-const GAS_WEB_APP_URL = "https://script.google.com/macros/library/d/1U9R6zCNn5kFQgCliNG6ylLSVdWqO630_hP0qnwmD6oKLmoiG_O6PM-Fz/5";
+// ★GASでデプロイした最新のウェブアプリURLをここに貼り付けてください
+const GAS_WEB_APP_URL = "YOUR_GAS_WEB_APP_URL_HERE";
 
 const paragraphs = [
  '\"Go back to your country. All Chinese people are trash.\" These are the harsh words someone I know often says when watching news or social media on their smartphone. To be honest, I used to agree with them.',
@@ -184,29 +184,31 @@ async function playAudioAPI(text, btnId, defaultText) {
  try {
  const response = await fetch(GAS_WEB_APP_URL, {
  method: 'POST',
- headers: { 'Content-Type': 'text/plain' },
+ headers: { 'Content-Type': 'text/plain' }, // CORS回避のためtext/plainに設定
  body: JSON.stringify({ action: 'getAudio', text: text })
  });
  const data = await response.json();
+ 
  if (data.audioContent) {
  currentAudio = new Audio("data:audio/mp3;base64," + data.audioContent);
  currentAudio.playbackRate = parseFloat(document.getElementById('speed-select').value);
  currentAudio.play();
  currentAudio.onended = () => { btn.innerText = defaultText; };
- return;
+ return; // 成功したらここで終了
+ } else if (data.error) {
+ alert("【GASからのエラー報告】\n" + data.error);
  }
  } catch (error) {
- console.error("API Error", error);
+ alert("【通信エラー】\nGASと正しく通信できませんでした。URLが間違っているか、GAS側のデプロイ設定が「全員」になっていない可能性があります。\n詳細: " + error.message);
  }
  }
  
- // Fallback: Web Speech API にSSML風の工夫を少し追加
+ // エラーが起きた場合のみブラウザ音声（ロボット）になる
+ btn.innerText = defaultText;
  const utterance = new SpeechSynthesisUtterance(text);
  utterance.lang = 'en-US';
  utterance.rate = parseFloat(document.getElementById('speed-select').value);
- utterance.pitch = 1.1; // 感情を出すために少しピッチを高める
  window.speechSynthesis.speak(utterance);
- utterance.onend = () => { btn.innerText = defaultText; };
 }
 
 function playPhrase(direction) {
@@ -326,7 +328,6 @@ function evaluateSpeech(recognizedText) {
  const maskRatio = document.getElementById('slider-value').innerText;
  let targetLabel = isTestingPhrase ? `段落${currentParaIndex + 1} (${currentSentenceIndex + 1}文目)` : `段落${currentParaIndex + 1} (全体)`;
 
- // 画面更新
  document.getElementById('feedback-display').innerHTML = 
  '<p><b>🗣️ あなたの声:</b><br>' + recognizedText + '</p>' +
  '<p><b>📝 判定結果（正答率: ' + score + '%）:</b></p>' +
@@ -334,40 +335,26 @@ function evaluateSpeech(recognizedText) {
  '<div class="advice-box" id="advice-box-content"><span class="loading-text">🔄 データをGASに送信中... 過去の弱点からアドバイスを生成しています...</span></div>';
 
  saveHistory(targetLabel, maskRatio, score);
- 
- // GASにデータ送信してアドバイス取得
  fetchAdviceFromGAS(targetLabel, score, missedWords);
 }
 
 async function fetchAdviceFromGAS(paragraph, score, missedWords) {
- if (!GAS_WEB_APP_URL.startsWith("http")) {
- document.getElementById('advice-box-content').innerHTML = 
- "<p>⚠️ GAS_WEB_APP_URLが設定されていないため、データの蓄積とAIアドバイス機能はスキップされました。</p>";
- return;
- }
+ if (!GAS_WEB_APP_URL.startsWith("http")) return;
  
  try {
  const response = await fetch(GAS_WEB_APP_URL, {
  method: 'POST',
  headers: { 'Content-Type': 'text/plain' },
- body: JSON.stringify({
- action: 'saveAndAdvice',
- paragraph: paragraph,
- score: score,
- missedWords: missedWords
- })
+ body: JSON.stringify({ action: 'saveAndAdvice', paragraph: paragraph, score: score, missedWords: missedWords })
  });
  const data = await response.json();
  if(data.advice) {
  document.getElementById('advice-box-content').innerHTML = 
  '<p style="margin-top: 0;"><b>💬 分析とアドバイス:</b></p>' + 
  '<p>' + data.advice.replace(/\n/g, '<br>') + '</p>';
- } else {
- document.getElementById('advice-box-content').innerHTML = "<p>データの記録が完了しました。</p>";
  }
  } catch (e) {
  console.error(e);
- document.getElementById('advice-box-content').innerHTML = "<p>⚠️ GASとの通信に失敗しました。</p>";
  }
 }
 
