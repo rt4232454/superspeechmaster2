@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>英語スピーチ暗記マスター</title>
+ <style>
+ body { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background-color: #f4f6f9; }
+ .container { background-color: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+ h1 { color: #2c3e50; text-align: center; margin-top: 0; font-size: 24px; }
+ .controls { display: flex; flex-wrap: wrap; gap: 15px; align-items: center; background-color: #eef2f7; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+ select, button { font-size: 16px; padding: 10px 15px; border-radius: 6px; border: 1px solid #ccc; }
+ button { background-color: #3498db; color: white; border: none; cursor: pointer; font-weight: bold; }
+ button:hover { background-color: #2980b9; }
+ #mic-btn { background-color: #2ecc71; }
+ #mic-btn:hover { background-color: #27ae60; }
+ .phrase-group { display: flex; gap: 4px; align-items: center; background-color: #fff; padding: 4px; border-radius: 8px; border: 1px solid #ddd; }
+ .phrase-group button { background-color: #f39c12; padding: 10px 12px; border-radius: 6px; }
+ .phrase-group button:hover { background-color: #e67e22; }
+ #play-phrase-btn { min-width: 130px; text-align: center; }
+ #mic-phrase-btn { background-color: #2ecc71; margin-left: 10px; }
+ #mic-phrase-btn:hover { background-color: #27ae60; }
+ .slider-container { display: flex; align-items: center; gap: 10px; flex-grow: 1; min-width: 250px; }
+ input[type=range] { flex-grow: 1; }
+ #text-display { font-size: 20px; line-height: 1.8; padding: 20px; border: 2px solid #e0e0e0; border-radius: 8px; min-height: 200px; background-color: #fafafa; white-space: pre-wrap; word-wrap: break-word; }
+ #feedback-display { margin-top: 20px; padding: 20px; background-color: #fff3cd; border-radius: 8px; border: 2px dashed #ffc107; display: none; font-size: 18px; line-height: 1.6; }
+ .correct-word { color: #27ae60; font-weight: bold; }
+ .wrong-word { color: #e74c3c; text-decoration: underline; }
+ .advice-box { background-color: #ffffff; padding: 15px; border-radius: 8px; border-left: 5px solid #3498db; margin-top: 15px; font-size: 16px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+ .loading-text { color: #888; font-style: italic; }
+ .history-section { margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px; }
+ table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+ th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+ th { background-color: #f8f9fa; }
+ .clear-btn { background-color: #e74c3c; font-size: 14px; padding: 5px 10px; float: right; }
+ .clear-btn:hover { background-color: #c0392b; }
+ </style>
+</head>
+<body>
+
+<div class="container">
+ <h1>英語スピーチ暗記マスター (AIアドバイス搭載版)</h1>
+
+ <div class="controls">
+ <label for="para-select"><b>段落:</b></label>
+ <select id="para-select" onchange="changeParagraph()">
+ <option value="0">第1段落</option>
+ <option value="1">第2段落</option>
+ <option value="2">第3段落</option>
+ <option value="3">第4段落</option>
+ <option value="4">第5段落</option>
+ </select>
+
+ <label for="speed-select"><b>速度:</b></label>
+ <select id="speed-select">
+ <option value="0.5">0.5x (とてもゆっくり)</option>
+ <option value="0.7">0.7x (ゆっくり)</option>
+ <option value="0.85" selected>0.85x (ややゆっくり)</option>
+ <option value="1.0">1.0x (標準)</option>
+ <option value="1.2">1.2x (少し速い)</option>
+ </select>
+
+ <button onclick="playAudio()" id="play-all-btn">🔊 全体を再生</button>
+
+ <div class="phrase-group">
+ <button onclick="playPhrase(-1)" title="前の文に戻る">⏮</button>
+ <button onclick="playPhrase(0)" id="play-phrase-btn">🔊 フレーズ再生</button>
+ <button onclick="playPhrase(1)" title="次の文に進む">⏭</button>
+ <button id="mic-phrase-btn" onclick="toggleMic(true)">🎤 1文テスト</button>
+ </div>
+
+ <button id="mic-btn" onclick="toggleMic(false)">🎤 段落全体をテスト</button>
+
+ <div class="slider-container">
+ <label for="mask-slider"><b>虫食い:</b></label>
+ <input type="range" id="mask-slider" min="0" max="100" value="0" oninput="updateText()">
+ <span id="slider-value">0%</span>
+ </div>
+ </div>
+
+ <div id="text-display"></div>
+ <div id="feedback-display"></div>
+
+ <div class="history-section">
+ <h2>📊 学習の記録 <button class="clear-btn" onclick="clearHistory()">履歴をリセット</button></h2>
+ <table>
+ <thead>
+ <tr>
+ <th>日時</th>
+ <th>対象</th>
+ <th>虫食い率</th>
+ <th>正答率</th>
+ </tr>
+ </thead>
+ <tbody id="history-table-body">
+ </tbody>
+ </table>
+ </div>
+</div>
+
+<script>
+// ★GASでデプロイしたウェブアプリのURLをここに貼り付けてください
+const GAS_WEB_APP_URL = "YOUR_GAS_WEB_APP_URL_HERE";
+
+const paragraphs = [
+ '\"Go back to your country. All Chinese people are trash.\" These are the harsh words someone I know often says when watching news or social media on their smartphone. To be honest, I used to agree with them.',
+ 'When I saw some viral videos of people with bad manners, I blindly believed that China was a scary and terrible place. It was easy to judge millions of people from a small screen. But every time I hear those angry words, a memory from my childhood wakes up in my heart. When I was in the fourth grade, I was taking a train back to my hometown. It was getting late, and I was feeling sleepy. When the train arrived at my station, I had to stand up in a hurry, but my favorite hat fell between the seats. \"Oh no,\" I thought as I panicked. However, another passenger picked up my hat, dusted it off, and handed it to me with a warm, gentle smile. She said something to me, but it was in Chinese. I couldn\'t understand and speak Chinese, so I was shocked and frozen. All I could do was to smile back nervously and say, \"Thank you,\" in English. But her kind eyes and warm smile stayed in my heart.',
+ 'Then years later when I heard, \"All Chinese people are trash,\" I felt a sharp pain in my chest. I thought to myself, \"Was that kind woman on the train trash? No, absolutely not. Her smile was real.\" That experience on the train changed me. It made me want to break the barrier of language. I wanted to say, \"Thank you,\" in her own words if I ever met her again. So, I started learning Chinese.',
+ 'Last year, through my grandmother and my mother, I met a Chinese lady named Han. She came to my house once to help me practice my Chinese. She was so kind. I felt so grateful, but I also felt bad when I asked her a question. \"Is China a scary place?\" She looked at me and answered gently, \"Maybe some parts are, but not all of it.\" Then, she told me about the Japanese and Chinese media. \"They only broadcast the bad sides of each other.\" Her words hit me like ice water. At that moment, I realized something important. I thought, \"China is scary,\" based on some social media. But she didn\'t hate me or Japan. She looked at me simply as a person. I felt deeply ashamed of my shallow thinking, and it terrified me. Do you think we rely too much on the huge lens of a nation\'s news and social media?',
+ 'I don\'t want to look at a country and make assumptions anymore. I want to look at each person, simply as an individual human being, just like you and me. Also, as Han taught me, I will stop judging billions of people with one single label. Now, let me ask you. Will you keep looking at the cropped images? Or will you look at the real person standing right in front of you and try to understand their real voices? I hope that people all over the world will interact with one another without bias. Just like that kind woman on the train who handed me my hat, now it is our turn to cross the barrier of languages and history.'
+];
+
+let currentParaIndex = 0;
+let recognition = null;
+let isListening = false;
+let isTestingPhrase = false;
+let currentSentenceIndex = 0;
+let sentences = [];
+let displayMode = 'paragraph'; 
+let currentAudio = null;
+
+function changeParagraph() {
+ currentParaIndex = parseInt(document.getElementById('para-select').value);
+ document.getElementById('mask-slider').value = 0;
+ document.getElementById('feedback-display').style.display = 'none';
+ currentSentenceIndex = 0;
+ sentences = [];
+ displayMode = 'paragraph'; 
+ document.getElementById('play-phrase-btn').innerText = "🔊 フレーズ再生";
+ updateText();
+}
+
+function updateText() {
+ const maskRatio = parseInt(document.getElementById('mask-slider').value) / 100;
+ document.getElementById('slider-value').innerText = Math.round(maskRatio * 100) + "%";
+ 
+ let text = "";
+ if (displayMode === 'phrase') {
+ if (sentences.length === 0) extractSentences();
+ text = sentences[currentSentenceIndex];
+ } else {
+ text = paragraphs[currentParaIndex];
+ }
+ 
+ if (maskRatio === 0) {
+ document.getElementById('text-display').innerText = text;
+ return;
+ }
+ 
+ const tokens = text.match(/[\w']+|[^\w\s]+|\s+/g) || [];
+ const wordIndices = [];
+ tokens.forEach(function(token, index) { if (/[\w']+/.test(token)) wordIndices.push(index); });
+ const hideCount = Math.floor(wordIndices.length * maskRatio);
+ const shuffled = wordIndices.slice().sort(function() { return 0.5 - Math.random(); });
+ const indicesToHide = new Set(shuffled.slice(0, hideCount));
+ let displayText = "";
+ tokens.forEach(function(token, index) {
+ displayText += indicesToHide.has(index) ? " ____ " : token;
+ });
+ document.getElementById('text-display').innerText = displayText;
+}
+
+function extractSentences() {
+ const text = paragraphs[currentParaIndex];
+ const matched = text.match(/[^.?!]+[.?!]+["']?/g);
+ if (matched) {
+ sentences = matched.map(function(s) { return s.trim(); });
+ } else {
+ sentences = [text];
+ }
+}
+
+async function playAudioAPI(text, btnId, defaultText) {
+ if (currentAudio) {
+ currentAudio.pause();
+ currentAudio = null;
+ }
+ window.speechSynthesis.cancel();
+ 
+ const btn = document.getElementById(btnId);
+ btn.innerText = "⏳ 読込中...";
+
+ if (GAS_WEB_APP_URL.startsWith("http")) {
+ try {
+ const response = await fetch(GAS_WEB_APP_URL, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ action: 'getAudio', text: text })
+ });
+ const data = await response.json();
+ if (data.audioContent) {
+ currentAudio = new Audio("data:audio/mp3;base64," + data.audioContent);
+ currentAudio.playbackRate = parseFloat(document.getElementById('speed-select').value);
+ currentAudio.play();
+ currentAudio.onended = () => { btn.innerText = defaultText; };
+ return;
+ }
+ } catch (error) {
+ console.error("API Error", error);
+ }
+ }
+ 
+ // Fallback: Web Speech API にSSML風の工夫を少し追加
+ const utterance = new SpeechSynthesisUtterance(text);
+ utterance.lang = 'en-US';
+ utterance.rate = parseFloat(document.getElementById('speed-select').value);
+ utterance.pitch = 1.1; // 感情を出すために少しピッチを高める
+ window.speechSynthesis.speak(utterance);
+ utterance.onend = () => { btn.innerText = defaultText; };
+}
+
+function playPhrase(direction) {
+ if (sentences.length === 0) extractSentences();
+ currentSentenceIndex += direction;
+ if (currentSentenceIndex < 0) currentSentenceIndex = sentences.length - 1;
+ if (currentSentenceIndex >= sentences.length) currentSentenceIndex = 0;
+
+ displayMode = 'phrase'; 
+ updateText(); 
+ 
+ const sentenceToPlay = sentences[currentSentenceIndex];
+ const defaultText = "🔊 " + (currentSentenceIndex + 1) + "/" + sentences.length + "文目";
+ playAudioAPI(sentenceToPlay, 'play-phrase-btn', defaultText);
+}
+
+function playAudio() {
+ displayMode = 'paragraph'; 
+ updateText(); 
+ const text = paragraphs[currentParaIndex];
+ playAudioAPI(text, 'play-all-btn', "🔊 全体を再生");
+}
+
+function toggleMic(phraseMode) {
+ if (!recognition) {
+ if (!initSpeechRecognition()) return;
+ }
+ if (isListening) {
+ recognition.stop();
+ return;
+ }
+ isTestingPhrase = phraseMode;
+ if (isTestingPhrase && sentences.length === 0) {
+ extractSentences();
+ document.getElementById('play-phrase-btn').innerText = "🔊 " + (currentSentenceIndex + 1) + "/" + sentences.length + "文目";
+ }
+ displayMode = isTestingPhrase ? 'phrase' : 'paragraph';
+ updateText();
+ recognition.start();
+}
+
+function initSpeechRecognition() {
+ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+ if (!SpeechRecognition) {
+ alert("お使いのブラウザはマイクでの音声認識に対応していません。Chromeでお試しください。");
+ return false;
+ }
+ recognition = new SpeechRecognition();
+ recognition.lang = 'en-US';
+ recognition.interimResults = false;
+ recognition.continuous = false;
+
+ recognition.onstart = function() {
+ isListening = true;
+ const btnId = isTestingPhrase ? 'mic-phrase-btn' : 'mic-btn';
+ const btn = document.getElementById(btnId);
+ btn.innerText = "⏹️ 録音を停止して判定";
+ btn.style.backgroundColor = "#e74c3c";
+ 
+ const feedback = document.getElementById('feedback-display');
+ feedback.style.display = 'block';
+ feedback.innerHTML = `<strong>🎤 聞き取り中... ${isTestingPhrase ? "1文" : "段落全体"}を英語で発音してください。</strong>`;
+ };
+
+ recognition.onresult = function(event) {
+ evaluateSpeech(event.results[0][0].transcript);
+ };
+
+ recognition.onerror = function(event) {
+ const feedback = document.getElementById('feedback-display');
+ feedback.style.display = 'block';
+ feedback.innerHTML = '<span style="color:red;">⚠️ エラーが発生しました: ' + event.error + '</span>';
+ };
+
+ recognition.onend = function() {
+ isListening = false;
+ document.getElementById('mic-phrase-btn').innerText = "🎤 1文テスト";
+ document.getElementById('mic-phrase-btn').style.backgroundColor = "#2ecc71";
+ document.getElementById('mic-btn').innerText = "🎤 段落全体をテスト";
+ document.getElementById('mic-btn').style.backgroundColor = "#2ecc71";
+ };
+ return true;
+}
+
+function evaluateSpeech(recognizedText) {
+ let originalText = isTestingPhrase ? sentences[currentSentenceIndex] : paragraphs[currentParaIndex];
+ const tokens = originalText.match(/[\w']+|[^\w\s]+|\s+/g) || [];
+ const normRec = recognizedText.toLowerCase().replace(/[.,!?;:"]/g, '').split(/\s+/);
+
+ let html = "";
+ let recIndex = 0;
+ let correctCount = 0;
+ let totalWords = 0;
+ let missedWords = [];
+
+ tokens.forEach(function(token) {
+ if (/[\w']+/.test(token)) {
+ totalWords++;
+ let cleanToken = token.toLowerCase();
+ let found = false;
+ for (let i = recIndex; i < Math.min(recIndex + 5, normRec.length); i++) {
+ if (normRec[i] === cleanToken) { found = true; recIndex = i + 1; break; }
+ }
+ if (found) {
+ html += '<span class="correct-word">' + token + '</span>';
+ correctCount++;
+ } else {
+ html += '<span class="wrong-word">' + token + '</span>';
+ missedWords.push(token);
+ }
+ } else {
+ html += token;
+ }
+ });
+
+ const score = totalWords > 0 ? Math.round((correctCount / totalWords) * 100) : 0;
+ const maskRatio = document.getElementById('slider-value').innerText;
+ let targetLabel = isTestingPhrase ? `段落${currentParaIndex + 1} (${currentSentenceIndex + 1}文目)` : `段落${currentParaIndex + 1} (全体)`;
+
+ // 画面更新
+ document.getElementById('feedback-display').innerHTML = 
+ '<p><b>🗣️ あなたの声:</b><br>' + recognizedText + '</p>' +
+ '<p><b>📝 判定結果（正答率: ' + score + '%）:</b></p>' +
+ '<p style="margin-bottom: 20px;">' + html + '</p>' +
+ '<div class="advice-box" id="advice-box-content"><span class="loading-text">🔄 データをGASに送信中... 過去の弱点からアドバイスを生成しています...</span></div>';
+
+ saveHistory(targetLabel, maskRatio, score);
+ 
+ // GASにデータ送信してアドバイス取得
+ fetchAdviceFromGAS(targetLabel, score, missedWords);
+}
+
+async function fetchAdviceFromGAS(paragraph, score, missedWords) {
+ if (!GAS_WEB_APP_URL.startsWith("http")) {
+ document.getElementById('advice-box-content').innerHTML = 
+ "<p>⚠️ GAS_WEB_APP_URLが設定されていないため、データの蓄積とAIアドバイス機能はスキップされました。</p>";
+ return;
+ }
+ 
+ try {
+ const response = await fetch(GAS_WEB_APP_URL, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({
+ action: 'saveAndAdvice',
+ paragraph: paragraph,
+ score: score,
+ missedWords: missedWords
+ })
+ });
+ const data = await response.json();
+ if(data.advice) {
+ document.getElementById('advice-box-content').innerHTML = 
+ '<p style="margin-top: 0;"><b>💬 分析とアドバイス:</b></p>' + 
+ '<p>' + data.advice.replace(/\n/g, '<br>') + '</p>';
+ } else {
+ document.getElementById('advice-box-content').innerHTML = "<p>データの記録が完了しました。</p>";
+ }
+ } catch (e) {
+ console.error(e);
+ document.getElementById('advice-box-content').innerHTML = "<p>⚠️ GASとの通信に失敗しました。</p>";
+ }
+}
+
+function saveHistory(targetLabel, maskRatio, score) {
+ let history = JSON.parse(localStorage.getItem('speechMasterHistory')) || [];
+ const now = new Date();
+ const record = {
+ date: now.toLocaleDateString() + ' ' + now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0'),
+ paragraph: targetLabel,
+ mask: maskRatio,
+ score: score + '%'
+ };
+ history.unshift(record);
+ localStorage.setItem('speechMasterHistory', JSON.stringify(history));
+ loadHistory();
+}
+
+function loadHistory() {
+ const history = JSON.parse(localStorage.getItem('speechMasterHistory')) || [];
+ const tbody = document.getElementById('history-table-body');
+ tbody.innerHTML = '';
+ if (history.length === 0) {
+ tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">記録はありません。</td></tr>';
+ return;
+ }
+ history.slice(0, 10).forEach(function(record) {
+ const row = '<tr><td>' + record.date + '</td><td>' + record.paragraph + '</td><td>' + record.mask + '</td><td>' + (parseInt(record.score) >= 80 ? '🌟 ' : '') + record.score + '</td></tr>';
+ tbody.innerHTML += row;
+ });
+}
+
+function clearHistory() {
+ if (confirm('学習履歴をすべて消去しますか？')) {
+ localStorage.removeItem('speechMasterHistory');
+ loadHistory();
+ }
+}
+
+updateText();
+loadHistory();
+</script>
+</body>
+</html>
