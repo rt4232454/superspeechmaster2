@@ -184,7 +184,7 @@ async function playAudioAPI(text, btnId, defaultText) {
  try {
  const response = await fetch(GAS_WEB_APP_URL, {
  method: 'POST',
- headers: { 'Content-Type': 'application/json' },
+ headers: { 'Content-Type': 'text/plain' },
  body: JSON.stringify({ action: 'getAudio', text: text })
  });
  const data = await response.json();
@@ -349,7 +349,7 @@ async function fetchAdviceFromGAS(paragraph, score, missedWords) {
  try {
  const response = await fetch(GAS_WEB_APP_URL, {
  method: 'POST',
- headers: { 'Content-Type': 'application/json' },
+ headers: { 'Content-Type': 'text/plain' },
  body: JSON.stringify({
  action: 'saveAndAdvice',
  paragraph: paragraph,
