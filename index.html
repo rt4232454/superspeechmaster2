@@ -183,8 +183,9 @@
       border-radius: 6px;
       border-left: 4px solid var(--primary);
     }
+    /* プログレスバー */
     .progress-box {
-      margin: 14px 0;
+      margin: 16px 0;
       display: none;
     }
     .progress-bar-bg {
@@ -193,13 +194,13 @@
       background: #e0e0e0;
       border-radius: 7px;
       overflow: hidden;
-      margin-top: 6px;
+      margin-top: 8px;
     }
     .progress-bar-fill {
       height: 100%;
       width: 0%;
       background: linear-gradient(90deg, #1a73e8, #34a853);
-      transition: width 0.3s ease;
+      transition: width 0.4s ease-out;
     }
 
     /* お手本カード */
@@ -389,7 +390,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       <button id="standbyBtn" class="btn-start">待機モード起動（音声検知準備）</button>
       <button id="manualStartBtn" class="btn-now">今すぐ計測開始（手動）</button>
       <button id="stopBtn" class="btn-stop">スピーチ終了・評価</button>
-      <!-- TTS単体動作テスト用ボタン -->
       <button id="testAudioBtn" type="button" class="btn-secondary" onclick="testDirectTTS()">🔊 TTS音声テスト再生</button>
       <div class="timer" id="timer">04:30</div>
       <span id="statusIndicator" class="status-badge">停止中</span>
@@ -436,7 +436,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       </div>
     </div>
 
-    <!-- 審査プログレスバー -->
+    <!-- 審査プログレスバー（改善版：フェーズ連動＆スムーズなイージング） -->
     <div id="progressBox" class="progress-box">
       <div style="display: flex; justify-content: space-between; font-size: 0.88rem; font-weight: bold; color: var(--primary);">
         <span id="evalStatus">審査準備中...</span>
@@ -484,7 +484,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
     window.addEventListener('DOMContentLoaded', fetchHistoryData);
 
-    // 音声認識エンジン
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
@@ -525,7 +524,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       alert("お使いのブラウザは音声認識APIに対応していません。Google Chromeをご利用ください。");
     }
 
-    // 待機モードボタン
     standbyBtn.onclick = async () => {
       accumulatedText = "";
       isManualStop = false;
@@ -652,6 +650,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       });
     }
 
+    // プログレスバーの更新表示
     function updateProgress(percent, text) {
       const progressBox = document.getElementById('progressBox');
       const progressBarFill = document.getElementById('progressBarFill');
@@ -719,12 +718,14 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }
     }
 
-    // フロントエンドからのTTS単体テスト関数
+    // 単体テスト関数（引用＋2秒タメ＋後半文の完全再生テスト）
     async function testDirectTTS() {
       const btn = document.getElementById('testAudioBtn');
       const originalText = btn.innerText;
       btn.innerText = "生成中...";
       btn.disabled = true;
+
+      const fullSampleText = '"Go back to your country. All Chinese people are trash." These are the harsh words someone I know often says when watching news or social media on their smartphone.';
 
       try {
         const res = await fetch(GAS_ENDPOINT_URL, {
@@ -732,14 +733,14 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify({
             action: "getTTS",
-            text: "Go back to your country. All Chinese people are trash.",
+            text: fullSampleText,
             styleType: "pause"
           })
         });
 
         const data = await res.json();
         if (data.status === "success" && data.audioBase64) {
-          btn.innerText = "再生中（2秒タメあり）...";
+          btn.innerText = "再生中（2秒タメ＋続き）...";
           const audio = new Audio("data:audio/mp3;base64," + data.audioBase64);
           audio.onended = () => {
             btn.innerText = originalText;
@@ -763,7 +764,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }
     }
 
-    // レポート内の [[MODEL: text | type]] をボタンカードに置換
     function renderReportWithModelButtons(rawReport) {
       let cleaned = rawReport.replace(/```json[\s\S]*?```\s*/i, '').trim();
       const regex = /\[\[MODEL:\s*([\s\S]*?)\s*\|\s*([a-zA-Z]+)\s*\]\]/g;
@@ -805,23 +805,32 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       reportContent.style.display = 'none';
       reportContent.innerHTML = "";
 
-      updateProgress(10, "【1/3】録画映像を最適化エンコード中...");
+      // 【プログレスバー改善】停止しないスムーズな進行演出
+      updateProgress(10, "【1/4】録画映像をエンコード中...");
 
       try {
         const mimeType = mediaRecorder ? mediaRecorder.mimeType : 'video/webm';
         const videoBlob = new Blob(recordedChunks, { type: mimeType });
         const base64Video = await blobToBase64(videoBlob);
 
-        updateProgress(35, "【2/3】Geminiへ動画・発話データを送信中...");
+        updateProgress(30, "【2/4】Geminiへ映像・音声データを送信中...");
 
-        let currentProg = 35;
+        let currentProg = 30;
         if (progressInterval) clearInterval(progressInterval);
+        
+        // 段階的にテキストを変化させつつ、98%まで絶対に停止せず進むイージング
         progressInterval = setInterval(() => {
-          if (currentProg < 92) {
-            currentProg += Math.random() * 4;
-            updateProgress(Math.min(92, currentProg), "【3/3】審査委員長AIが動画・抑揚・原稿一致度を精査中...");
+          if (currentProg < 65) {
+            currentProg += 1.8;
+            updateProgress(currentProg, "【3/4】審査委員長AIが動画・姿勢・緩急を精査中...");
+          } else if (currentProg < 88) {
+            currentProg += 0.8;
+            updateProgress(currentProg, "【3/4】沈黙の秒数・セリフ抑揚を音響解析中...");
+          } else if (currentProg < 98) {
+            currentProg += 0.3; // 終盤も微動し続けて止まらない
+            updateProgress(currentProg, "【4/4】本選基準スコア算出＆講評レポートを作成中...");
           }
-        }, 800);
+        }, 500);
 
         const res = await fetch(GAS_ENDPOINT_URL, {
           method: 'POST',
@@ -842,7 +851,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         clearInterval(progressInterval);
 
         if (data.status === "success") {
-          updateProgress(100, "審査完了・ダッシュボードへ記録しました！");
+          updateProgress(100, "審査完了！ダッシュボードに反映しました");
 
           document.getElementById('resTotalScore').innerText = data.scores.totalScore;
           document.getElementById('resScoreAccuracy').innerText = data.scores.scoreAccuracy;
