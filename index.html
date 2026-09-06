@@ -169,12 +169,12 @@
       background: #f1f3f4;
       border: 1px solid #e0e0e0;
       border-radius: 4px;
-      padding: 12px;
-      min-height: 95px;
-      max-height: 180px;
+      padding: 14px;
+      min-height: 100px;
+      max-height: 220px;
       overflow-y: auto;
-      font-size: 0.92rem;
-      line-height: 1.6;
+      font-size: 0.95rem;
+      line-height: 1.7;
     }
     .report-box {
       line-height: 1.8;
@@ -185,7 +185,7 @@
       border-left: 4px solid var(--primary);
     }
 
-    /* 新しいステップ型＆シマープログレスUI */
+    /* ステップ型プログレスバー */
     .progress-box {
       margin: 18px 0;
       display: none;
@@ -233,23 +233,24 @@
       100% { background-position: -100% 0; }
     }
 
-    /* 原稿差分ハイライトのスタイル */
+    /* 誤認識・脱落単語の赤字ハイライトスタイル */
     .diff-match { color: #202124; }
     .diff-mismatch {
       color: #d93025;
       background-color: #fce8e6;
       font-weight: bold;
-      padding: 1px 4px;
+      padding: 2px 5px;
       border-radius: 3px;
-      margin: 0 1px;
+      border: 1px solid #fad2cf;
+      margin: 0 2px;
     }
     .diff-omitted {
       color: #70757a;
       text-decoration: line-through;
-      background-color: #f1f3f4;
-      padding: 1px 4px;
+      background-color: #e8eaed;
+      padding: 2px 5px;
       border-radius: 3px;
-      margin: 0 1px;
+      margin: 0 2px;
       font-size: 0.88em;
     }
 
@@ -440,14 +441,14 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       <button id="standbyBtn" class="btn-start">待機モード起動（音声検知準備）</button>
       <button id="manualStartBtn" class="btn-now">今すぐ計測開始（手動）</button>
       <button id="stopBtn" class="btn-stop">スピーチ終了・評価</button>
-      <button id="testAudioBtn" type="button" class="btn-secondary" onclick="testDirectTTS()">🔊 TTS音声テスト再生</button>
+      <button id="testAudioBtn" type="button" class="btn-secondary" onclick="testDirectTTS()">🔊 TTSタメ＋再開テスト</button>
       <div class="timer" id="timer">04:30</div>
       <span id="statusIndicator" class="status-badge">停止中</span>
     </div>
 
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <h3 style="margin: 0;">リアルタイム書き起こし ＆ 原稿差分ハイライト</h3>
-      <span style="font-size:0.78rem; color:var(--text-sub);">※審査完了後に赤字（不一致・誤認識）がハイライトされます</span>
+      <span style="font-size:0.78rem; color:var(--danger); font-weight:bold;">※審査完了後、原稿と異なる単語（誤認識・脱落）が赤字表示されます</span>
     </div>
     <div id="liveTranscript" class="transcript-box" style="margin-top: 6px;">「待機モード起動」後、英語で話し始めると自動で文字起こしと計測が開始します...</div>
   </div>
@@ -489,7 +490,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       </div>
     </div>
 
-    <!-- ストレスのない新ステップ型プログレスバー -->
+    <!-- ステップ進行バー -->
     <div id="progressBox" class="progress-box">
       <div class="step-tracker">
         <span id="step1" class="step-item active">① 映像エンコード</span>
@@ -707,7 +708,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       });
     }
 
-    // ステップインジケーターの更新
     function setStep(stepNum, statusText) {
       document.getElementById('progressBox').style.display = 'block';
       document.getElementById('evalStatus').innerText = statusText;
@@ -725,40 +725,47 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }
     }
 
-    // 原稿と音声認識テキストの単語差分ハイライト関数
+    // 【単語差分ハイライト処理】原稿と発話結果を照合し、誤り・脱落を赤字ハイライト
     function renderDiffHighlight(originalText, recognizedText) {
-      const cleanTokens = (str) => {
-        return str.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, "")
-                  .toLowerCase()
-                  .split(/\s+/)
-                  .filter(Boolean);
-      };
+      const cleanWord = (w) => w.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, "").toLowerCase().trim();
 
-      const origTokens = cleanTokens(originalText);
-      const recTokens = cleanTokens(recognizedText);
+      const origTokens = originalText.split(/\s+/).filter(Boolean);
+      const recTokens = recognizedText.split(/\s+/).filter(Boolean);
 
-      let html = "<strong>【原稿対比・誤認識チェック】</strong><br>";
+      let html = '<div style="margin-bottom:8px; font-weight:bold; color:var(--primary);">【発音正確性チェック結果】<span style="font-weight:normal; font-size:0.85rem; color:#d93025; margin-left:8px;">赤字: 誤認識・言い間違い / 取消線: 原稿脱落</span></div>';
+      
       let origIdx = 0;
 
-      recTokens.forEach((word) => {
-        const targetWord = origTokens[origIdx];
-        if (targetWord && word === targetWord) {
-          html += `<span class="diff-match">${word}</span> `;
+      recTokens.forEach((rWord) => {
+        const rClean = cleanWord(rWord);
+        const oWord = origTokens[origIdx] || "";
+        const oClean = cleanWord(oWord);
+
+        if (rClean === oClean) {
+          // 一致
+          html += `<span class="diff-match">${rWord}</span> `;
           origIdx++;
         } else {
-          // 少し先を探して脱落があるか判定
-          const nextMatch = origTokens.slice(origIdx, origIdx + 4).indexOf(word);
-          if (nextMatch > 0) {
-            // 抜かしてしまった単語を打消し線表示
-            for (let k = 0; k < nextMatch; k++) {
-              html += `<span class="diff-omitted">[抜] ${origTokens[origIdx]}</span> `;
+          // 先の単語を探す（脱落があるか）
+          let matchedAhead = -1;
+          for (let k = 1; k <= 4; k++) {
+            if (origTokens[origIdx + k] && cleanWord(origTokens[origIdx + k]) === rClean) {
+              matchedAhead = k;
+              break;
+            }
+          }
+
+          if (matchedAhead !== -1) {
+            // 抜かしてしまった単語を取消線で表示
+            for (let m = 0; m < matchedAhead; m++) {
+              html += `<span class="diff-omitted">${origTokens[origIdx]}</span> `;
               origIdx++;
             }
-            html += `<span class="diff-match">${word}</span> `;
+            html += `<span class="diff-match">${rWord}</span> `;
             origIdx++;
           } else {
-            // 原稿と一致しない単語（誤認識・言い間違い）を赤字表示
-            html += `<span class="diff-mismatch">${word}</span> `;
+            // 原稿と一致しない（誤認識または言い間違い）➔ 赤字ハイライト
+            html += `<span class="diff-mismatch">${rWord}</span> `;
           }
         }
       });
@@ -821,14 +828,14 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }
     }
 
-    // 単体テスト関数（引用＋2秒タメ＋後半文の完全再生テスト）
+    // 単体テスト関数（タメ＋再開フレーズのテスト）
     async function testDirectTTS() {
       const btn = document.getElementById('testAudioBtn');
       const originalText = btn.innerText;
       btn.innerText = "生成中...";
       btn.disabled = true;
 
-      const fullSampleText = '"Go back to your country. All Chinese people are trash." These are the harsh words someone I know often says when watching news or social media on their smartphone.';
+      const sampleText = '"Go back to your country. All Chinese people are trash." [PAUSE] These are the harsh words someone I know often says when watching news or social media on their smartphone.';
 
       try {
         const res = await fetch(GAS_ENDPOINT_URL, {
@@ -836,27 +843,27 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify({
             action: "getTTS",
-            text: fullSampleText,
+            text: sampleText,
             styleType: "pause"
           })
         });
 
         const data = await res.json();
         if (data.status === "success" && data.audioBase64) {
-          btn.innerText = "再生中（2秒タメ＋続き）...";
+          btn.innerText = "再生中（2秒タメ＋再開）...";
           const audio = new Audio("data:audio/mp3;base64," + data.audioBase64);
           audio.onended = () => {
             btn.innerText = originalText;
             btn.disabled = false;
           };
           audio.onerror = () => {
-            alert("オーディオ再生エラーが発生しました");
+            alert("オーディオ再生エラー");
             btn.innerText = originalText;
             btn.disabled = false;
           };
           await audio.play();
         } else {
-          alert("エラー: " + (data.message || "音声データの取得に失敗しました"));
+          alert("エラー: " + (data.message || "音声取得失敗"));
           btn.innerText = originalText;
           btn.disabled = false;
         }
@@ -876,14 +883,14 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         const cleanAttr = cleanText.replace(/'/g, "\\'");
 
         let labelTag = "お手本";
-        if (type === "pause") labelTag = "タメ（2秒沈黙）";
-        if (type === "fast") labelTag = "加速・焦り";
-        if (type === "slow") labelTag = "減速・内省";
+        if (type === "pause") labelTag = "タメ（2秒沈黙＋再開）";
+        if (type === "fast") labelTag = "加速・焦り（135 WPM）";
+        if (type === "slow") labelTag = "減速・内省（90 WPM）";
         if (type === "warm") labelTag = "穏やか・温かみ";
 
         return `
           <div class="model-audio-card">
-            <span class="model-audio-text">"${cleanText}"</span>
+            <span class="model-audio-text">"${cleanText.replace(/\[PAUSE\]/g, ' <strong>[2秒沈黙]</strong> ')}"</span>
             <button class="btn-play-model" onclick="playGoogleTTSModel('${cleanAttr}', '${type}', this)">
               🔊 ${labelTag}を聞く
             </button>
@@ -908,7 +915,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       reportContent.style.display = 'none';
       reportContent.innerHTML = "";
 
-      // ステップ1: エンコード開始
+      // ステップ1
       setStep(1, "【ステップ1/4】録画映像を最適化エンコード中...");
 
       try {
@@ -916,13 +923,14 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         const videoBlob = new Blob(recordedChunks, { type: mimeType });
         const base64Video = await blobToBase64(videoBlob);
 
-        // ステップ2: 送信開始
+        // ステップ2
         setStep(2, "【ステップ2/4】Gemini審査エンジンへ動画・音声を転送中...");
 
-        // 3秒後に自動でステップ3へ移行（AI解析フェーズ）
         setTimeout(() => {
-          setStep(3, "【ステップ3/4】審査委員長AIが動画・所作・緩急・タメを精査中（常時解析中）...");
+          setStep(3, "【ステップ3/4】審査委員長AIが動画・所作・緩急・タメを精査中...");
         }, 3500);
+
+        const originalScript = document.getElementById('scriptText').value;
 
         const res = await fetch(GAS_ENDPOINT_URL, {
           method: 'POST',
@@ -933,13 +941,13 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
             duration: elapsedSec,
             wpm: wpm,
             wordCount: wordCount,
-            script: document.getElementById('scriptText').value,
+            script: originalScript,
             transcript: finalFullText,
             videoBase64: base64Video
           })
         });
 
-        // ステップ4: レポート受領＆反映
+        // ステップ4
         setStep(4, "【ステップ4/4】本選基準スコア算出＆講評レポートを反映中...");
 
         const data = await res.json();
@@ -957,8 +965,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           document.getElementById('resScoreVoiceTone').innerText = data.scores.scoreVoiceTone;
           document.getElementById('resScorePosture').innerText = data.scores.scorePosture;
 
-          // 原稿差分ハイライトを書き起こしエリアに展開
-          const originalScript = document.getElementById('scriptText').value;
+          // 🚨 ここで誤認識・脱落単語の赤字ハイライトを適用！
           liveTranscriptEl.innerHTML = renderDiffHighlight(originalScript, finalFullText);
 
           reportContent.innerHTML = renderReportWithModelButtons(data.report);
