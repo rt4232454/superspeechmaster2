@@ -147,7 +147,6 @@
 
   <h1>英語弁論大会 練習＆AI評価ダッシュボード</h1>
 
-  <!-- 1. 進捗ダッシュボード -->
   <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <h2>練習進捗ダッシュボード</h2>
@@ -198,7 +197,6 @@
     </div>
   </div>
 
-  <!-- 2. 設定・原稿確認 -->
   <div class="card">
     <h2>練習設定・原稿確認</h2>
     <div class="form-group">
@@ -223,7 +221,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     </div>
   </div>
 
-  <!-- 3. スピーチ測定・カメラ -->
   <div class="card">
     <h2>スピーチ測定・練習開始</h2>
     <div class="video-container" id="videoContainer">
@@ -242,7 +239,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     <div id="liveTranscript" class="transcript-box">「待機モード起動」を押した後、マイクに向かって話し始めると自動検知して開始します...</div>
   </div>
 
-  <!-- 4. 最新の審査レポート -->
   <div id="resultCard" class="card" style="display: none;">
     <h2>最新のAI審査レポート</h2>
     
@@ -270,7 +266,8 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
   </div>
 
   <script>
-    const GAS_ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbywXzAJUebftkdQaiSnVAzY4WSVPYZuFxzJ4I-W6fw1NaQy0tUF9ECLHOYXZB4SdkBK7Q/exec";
+    // 新しくデプロイされたGASウェブアプリURL
+    const GAS_ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbzVzu2KTA-WElihHshUicIvkYTJyQ0p3yfGEj3KwGd77cMFdygdmYfMk4FicO2uF-Bzwg/exec";
 
     const preview = document.getElementById('preview');
     const cameraPlaceholder = document.getElementById('cameraPlaceholder');
@@ -458,7 +455,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
         evalStatus.innerText = "【2/2】GAS経由でGemini審査・採点中（30〜60秒）...";
 
-        // GASへデータをPOST（Gemini呼び出しはGAS側で実行）
+        // 新しいGASエンドポイントへ送信
         const res = await fetch(GAS_ENDPOINT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
