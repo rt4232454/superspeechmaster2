@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>英語弁論大会 練習＆AI評価ダッシュボード</title>
+  <title>英語弁論大会 表現特化AIコーチ＆ダッシュボード</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
@@ -26,9 +26,9 @@
       color: var(--text);
       line-height: 1.5;
     }
-    h1 { font-size: 1.6rem; margin-bottom: 20px; }
-    h2 { font-size: 1.25rem; margin-top: 0; border-bottom: 2px solid var(--border); padding-bottom: 6px; }
-    h3 { font-size: 1.05rem; margin: 12px 0 6px; }
+    h1 { font-size: 1.5rem; margin-bottom: 16px; }
+    h2 { font-size: 1.2rem; margin-top: 0; border-bottom: 2px solid var(--border); padding-bottom: 6px; }
+    h3 { font-size: 1rem; margin: 12px 0 6px; }
     .card {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -37,6 +37,15 @@
       margin-bottom: 20px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
+    .check-box-container {
+      background: #eef3fc;
+      border: 1px solid #cce0ff;
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: 0.88rem;
+    }
+    .check-box-container ul { margin: 6px 0 0; padding-left: 20px; }
     .form-group { margin-bottom: 12px; }
     label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 0.9rem; }
     input[type="text"], textarea {
@@ -47,7 +56,7 @@
       border-radius: 4px;
       font-size: 0.95rem;
     }
-    textarea { height: 140px; resize: vertical; line-height: 1.4; }
+    textarea { height: 130px; resize: vertical; line-height: 1.4; }
     .video-container {
       position: relative;
       width: 100%;
@@ -102,15 +111,15 @@
       border: 1px solid #e0e0e0;
       border-radius: 4px;
       padding: 12px;
-      height: 100px;
+      height: 90px;
       overflow-y: auto;
-      font-size: 0.9rem;
-      line-height: 1.6;
+      font-size: 0.88rem;
+      line-height: 1.5;
     }
     .report-box {
       white-space: pre-wrap;
       line-height: 1.7;
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       background: #fafafa;
       padding: 16px;
       border-radius: 6px;
@@ -118,62 +127,86 @@
     }
     .metrics-summary {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
       gap: 12px;
       margin-bottom: 16px;
     }
     .metric-card {
       background: #f8f9fa;
-      padding: 12px;
+      padding: 10px;
       border-radius: 6px;
       text-align: center;
       border: 1px solid #e8eaed;
     }
-    .metric-value { font-size: 1.4rem; font-weight: bold; color: var(--primary); }
-    .metric-label { font-size: 0.8rem; color: var(--text-sub); }
+    .metric-value { font-size: 1.3rem; font-weight: bold; color: var(--primary); }
+    .metric-label { font-size: 0.78rem; color: var(--text-sub); margin-top: 2px; }
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 768px) {
+      .charts-grid { grid-template-columns: 1fr; }
+    }
     .table-container {
-      max-height: 250px;
+      max-height: 240px;
       overflow-y: auto;
-      margin-top: 15px;
+      margin-top: 12px;
       border: 1px solid var(--border);
       border-radius: 4px;
     }
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    th, td { padding: 8px 12px; text-align: center; border-bottom: 1px solid #eee; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    th, td { padding: 8px 10px; text-align: center; border-bottom: 1px solid #eee; }
     th { background: #f1f3f4; position: sticky; top: 0; }
   </style>
 </head>
 <body>
 
-  <h1>英語弁論大会 練習＆AI評価ダッシュボード</h1>
+  <h1>英語弁論大会 表現特化AIコーチ＆ダッシュボード</h1>
+
+  <div class="check-box-container">
+    <strong>本選特化・集中評価ポイント:</strong>
+    <ul>
+      <li><strong>話速の緩急:</strong> 電車の焦る描写（130 WPM超）⇄ 内省・韓さんの言葉（100 WPM付近）</li>
+      <li><strong>無音のタメ:</strong> 冒頭の引用後（2秒停止）＆ 結びの問いかけ前（2秒停止）</li>
+      <li><strong>セリフの演じ分け:</strong> 引用・電車の女性・韓さんの発話時のトーン＆視線の変化</li>
+      <li><strong>所作の安定:</strong> 手のホームポジション（みぞおちキープ）と決めのジェスチャー</li>
+    </ul>
+  </div>
 
   <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center;">
-      <h2>練習進捗ダッシュボード</h2>
+      <h2>4観点パフォーマンス推移</h2>
       <button class="btn-secondary" onclick="fetchHistoryData()">データを再読込</button>
     </div>
 
-    <div class="metrics-summary" style="margin-top: 15px;">
+    <div class="metrics-summary" style="margin-top: 12px;">
       <div class="metric-card">
         <div class="metric-value" id="dashTotalAttempts">0</div>
         <div class="metric-label">総練習回数</div>
       </div>
       <div class="metric-card">
         <div class="metric-value" id="dashBestScore">0</div>
-        <div class="metric-label">最高総合スコア</div>
+        <div class="metric-label">最高総合得点</div>
       </div>
       <div class="metric-card">
         <div class="metric-value" id="dashLatestWpm">0</div>
-        <div class="metric-label">最新WPM (目安115)</div>
+        <div class="metric-label">平均話速 WPM (目安115)</div>
       </div>
       <div class="metric-card">
         <div class="metric-value" id="dashLatestDuration">00:00</div>
-        <div class="metric-label">最新所要時間 (目安04:30)</div>
+        <div class="metric-label">所要時間 (目標04:30)</div>
       </div>
     </div>
 
-    <div style="width: 100%; height: 260px; margin-bottom: 15px;">
-      <canvas id="scoreChart"></canvas>
+    <div class="charts-grid">
+      <div style="height: 250px; background: #fff; padding: 8px; border: 1px solid #eee; border-radius: 6px;">
+        <canvas id="scoreLineChart"></canvas>
+      </div>
+      <div style="height: 250px; background: #fff; padding: 8px; border: 1px solid #eee; border-radius: 6px;">
+        <canvas id="scoreRadarChart"></canvas>
+      </div>
     </div>
 
     <div class="table-container">
@@ -182,11 +215,11 @@
           <tr>
             <th>日時</th>
             <th>総合点</th>
-            <th>構成</th>
-            <th>話速</th>
-            <th>表現</th>
-            <th>正確さ</th>
-            <th>所要時間</th>
+            <th>話速の緩急</th>
+            <th>無音のタメ</th>
+            <th>セリフ表現</th>
+            <th>所作・手位置</th>
+            <th>時間</th>
             <th>WPM</th>
           </tr>
         </thead>
@@ -198,13 +231,13 @@
   </div>
 
   <div class="card">
-    <h2>練習設定・原稿確認</h2>
+    <h2>練習設定・スピーチ原稿</h2>
     <div class="form-group">
       <label for="studentName">生徒氏名:</label>
       <input type="text" id="studentName" value="生徒A" onchange="fetchHistoryData()">
     </div>
     <div class="form-group">
-      <label for="scriptText">スピーチ原稿（目標: 4分30秒 / 115 WPM）:</label>
+      <label for="scriptText">原稿本文（目標時間: 4分30秒 / 115 WPM）:</label>
       <textarea id="scriptText">Cropped Reality
 
 "Go back to your country. All Chinese people are trash." These are the harsh words someone I know often says when watching news or social media on their smartphone. To be honest, I used to agree with them.
@@ -235,29 +268,33 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       <span id="statusIndicator" class="status-badge">完全停止中</span>
     </div>
 
-    <h3>発話内容のリアルタイム書き起こし</h3>
-    <div id="liveTranscript" class="transcript-box">「待機モード起動」を押した後、マイクに向かって話し始めると自動検知して開始します...</div>
+    <h3>リアルタイム書き起こし</h3>
+    <div id="liveTranscript" class="transcript-box">「待機モード起動」後、マイクに向かって話し始めると自動検知して開始します...</div>
   </div>
 
   <div id="resultCard" class="card" style="display: none;">
-    <h2>最新のAI審査レポート</h2>
+    <h2>最新AI審査レポート（4観点特化採点）</h2>
     
     <div class="metrics-summary">
       <div class="metric-card">
         <div class="metric-value" id="resTotalScore">-</div>
-        <div class="metric-label">総合スコア（100点）</div>
+        <div class="metric-label">総合スコア (100点)</div>
       </div>
       <div class="metric-card">
-        <div class="metric-value" id="resDuration">0:00</div>
-        <div class="metric-label">発表時間（目標4:30）</div>
+        <div class="metric-value" id="resScorePacing">-</div>
+        <div class="metric-label">緩急の落差 (25点)</div>
       </div>
       <div class="metric-card">
-        <div class="metric-value" id="resWpm">0</div>
-        <div class="metric-label">平均話速 WPM</div>
+        <div class="metric-value" id="resScorePause">-</div>
+        <div class="metric-label">無音のタメ (25点)</div>
       </div>
       <div class="metric-card">
-        <div class="metric-value" id="resWordCount">0</div>
-        <div class="metric-label">認識語数</div>
+        <div class="metric-value" id="resScoreVoiceTone">-</div>
+        <div class="metric-label">セリフ表現 (25点)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value" id="resScorePosture">-</div>
+        <div class="metric-label">所作・手位置 (25点)</div>
       </div>
     </div>
 
@@ -266,7 +303,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
   </div>
 
   <script>
-    // 新しくデプロイされたGASウェブアプリURL
     const GAS_ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbzVzu2KTA-WElihHshUicIvkYTJyQ0p3yfGEj3KwGd77cMFdygdmYfMk4FicO2uF-Bzwg/exec";
 
     const preview = document.getElementById('preview');
@@ -285,15 +321,16 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     let isSpeechRunning = false;
 
     let fullTranscript = "";
-    const TARGET_DURATION = 270; // 4分30秒
+    const TARGET_DURATION = 270;
     let timeLeft = TARGET_DURATION;
     let timerInterval = null;
     let speechStartTime = 0;
-    let scoreChartInstance = null;
+
+    let lineChartInstance = null;
+    let radarChartInstance = null;
 
     window.addEventListener('DOMContentLoaded', fetchHistoryData);
 
-    // Web Speech API（音声検知用）
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
@@ -320,7 +357,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       };
     }
 
-    // 待機モードボタン
     standbyBtn.onclick = () => {
       fullTranscript = "";
       liveTranscriptEl.innerText = "第一声を待っています... 話し始めると自動でカメラが起動しタイマーが作動します。";
@@ -338,7 +374,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }
     };
 
-    // 声検知でカメラ・タイマー起動
     async function triggerSpeechStart() {
       isSpeechRunning = true;
       statusIndicator.innerText = "本番計測中（カメラON）";
@@ -387,7 +422,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }, 1000);
     }
 
-    // 終了ボタン
     stopBtn.onclick = stopSpeech;
 
     function stopSpeech() {
@@ -410,11 +444,11 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       preview.srcObject = null;
       preview.style.display = "none";
       cameraPlaceholder.style.display = "block";
-      cameraPlaceholder.innerText = "カメラ停止中（GAS審査処理中）";
+      cameraPlaceholder.innerText = "カメラ停止中（AI審査中）";
 
       standbyBtn.style.display = 'inline-block';
       stopBtn.style.display = 'none';
-      statusIndicator.innerText = "計測完了・解析送信中";
+      statusIndicator.innerText = "計測完了・解析中";
       statusIndicator.style.background = "#e8f0fe";
       statusIndicator.style.color = "var(--primary)";
     }
@@ -438,24 +472,18 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       const wpm = elapsedMinutes > 0 ? Math.round(wordCount / elapsedMinutes) : 0;
 
       document.getElementById('resultCard').style.display = 'block';
-      const m = Math.floor(elapsedSec / 60);
-      const s = String(elapsedSec % 60).padStart(2, '0');
-      document.getElementById('resDuration').innerText = `${m}:${s}`;
-      document.getElementById('resWpm').innerText = wpm;
-      document.getElementById('resWordCount').innerText = wordCount;
 
       const evalStatus = document.getElementById('evalStatus');
       const reportContent = document.getElementById('reportContent');
-      evalStatus.innerText = "【1/2】動画データを変換中...";
+      evalStatus.innerText = "【1/2】録画映像をエンコード中...";
       reportContent.innerText = "";
 
       try {
         const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
         const base64Video = await blobToBase64(videoBlob);
 
-        evalStatus.innerText = "【2/2】GAS経由でGemini審査・採点中（30〜60秒）...";
+        evalStatus.innerText = "【2/2】4観点（緩急・タメ・セリフ・所作）をAI審査中（約30〜45秒）...";
 
-        // 新しいGASエンドポイントへ送信
         const res = await fetch(GAS_ENDPOINT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
@@ -475,8 +503,13 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
         if (data.status === "success") {
           document.getElementById('resTotalScore').innerText = data.scores.totalScore;
+          document.getElementById('resScorePacing').innerText = data.scores.scorePacing;
+          document.getElementById('resScorePause').innerText = data.scores.scorePause;
+          document.getElementById('resScoreVoiceTone').innerText = data.scores.scoreVoiceTone;
+          document.getElementById('resScorePosture').innerText = data.scores.scorePosture;
+          
           reportContent.innerText = data.report;
-          evalStatus.innerText = "審査完了・スプレッドシート保存完了！";
+          evalStatus.innerText = "審査完了・スコアをダッシュボードに反映しました！";
           fetchHistoryData();
         } else {
           throw new Error(data.message || "GAS審査エラー");
@@ -488,7 +521,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }
     }
 
-    // ダッシュボード用データ取得 (GAS GET)
     async function fetchHistoryData() {
       const studentName = document.getElementById('studentName').value.trim();
       const tbody = document.getElementById('historyTableBody');
@@ -535,67 +567,96 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         tr.innerHTML = `
           <td>${row.date}</td>
           <td><strong>${row.totalScore}</strong></td>
-          <td>${row.scoreContent}</td>
-          <td>${row.scoreDelivery}</td>
-          <td>${row.scoreExpression}</td>
-          <td>${row.scoreAccuracy}</td>
+          <td>${row.scorePacing || '-'}</td>
+          <td>${row.scorePause || '-'}</td>
+          <td>${row.scoreVoiceTone || '-'}</td>
+          <td>${row.scorePosture || '-'}</td>
           <td>${row.durationFormatted}</td>
           <td>${row.wpm}</td>
         `;
         tbody.appendChild(tr);
       });
 
-      updateChart(history);
+      updateCharts(history);
     }
 
-    function updateChart(history) {
-      const ctx = document.getElementById('scoreChart').getContext('2d');
+    function updateCharts(history) {
       const labels = history.map((_, i) => `#${i + 1}`);
       const totalScores = history.map(h => h.totalScore);
-      const deliveryScores = history.map(h => h.scoreDelivery);
-      const expressionScores = history.map(h => h.scoreExpression);
+      const pacingScores = history.map(h => h.scorePacing || 0);
+      const pauseScores = history.map(h => h.scorePause || 0);
 
-      if (scoreChartInstance) {
-        scoreChartInstance.destroy();
-      }
-
-      scoreChartInstance = new Chart(ctx, {
+      // 折れ線グラフ
+      const ctxLine = document.getElementById('scoreLineChart').getContext('2d');
+      if (lineChartInstance) lineChartInstance.destroy();
+      lineChartInstance = new Chart(ctxLine, {
         type: 'line',
         data: {
           labels: labels,
           datasets: [
             {
-              label: '総合得点 (100点満点)',
+              label: '総合点(100点)',
               data: totalScores,
               borderColor: '#1a73e8',
               backgroundColor: 'rgba(26, 115, 232, 0.1)',
               borderWidth: 3,
-              tension: 0.3,
+              tension: 0.2,
               fill: true
             },
             {
-              label: 'デリバリー・話速 (25点)',
-              data: deliveryScores,
+              label: '話速の緩急(25点)',
+              data: pacingScores,
               borderColor: '#34a853',
               borderWidth: 2,
-              borderDash: [5, 5],
-              tension: 0.3
+              tension: 0.2
             },
             {
-              label: 'ジェスチャー・表情 (25点)',
-              data: expressionScores,
+              label: '無音のタメ(25点)',
+              data: pauseScores,
               borderColor: '#fbbc04',
               borderWidth: 2,
-              borderDash: [5, 5],
-              tension: 0.3
+              tension: 0.2
             }
           ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          scales: { y: { min: 0, max: 100 } }
+        }
+      });
+
+      // レーダーチャート（最新回の4観点バランス）
+      const latest = history[history.length - 1];
+      const ctxRadar = document.getElementById('scoreRadarChart').getContext('2d');
+      if (radarChartInstance) radarChartInstance.destroy();
+      radarChartInstance = new Chart(ctxRadar, {
+        type: 'radar',
+        data: {
+          labels: ['話速の緩急', '無音のタメ', 'セリフ表現', '所作・手位置'],
+          datasets: [{
+            label: '最新回バランス (各25点満点)',
+            data: [
+              latest.scorePacing || 0,
+              latest.scorePause || 0,
+              latest.scoreVoiceTone || 0,
+              latest.scorePosture || 0
+            ],
+            backgroundColor: 'rgba(26, 115, 232, 0.2)',
+            borderColor: '#1a73e8',
+            pointBackgroundColor: '#1a73e8',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
           scales: {
-            y: { min: 0, max: 100 }
+            r: {
+              suggestedMin: 0,
+              suggestedMax: 25,
+              ticks: { stepSize: 5 }
+            }
           }
         }
       });
