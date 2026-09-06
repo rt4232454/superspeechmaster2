@@ -1,382 +1,4 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>英語弁論大会 本選入賞ナビゲーター＆AIダッシュボード</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    :root {
-      --primary: #1a73e8;
-      --primary-hover: #1557b0;
-      --gold: #f29900;
-      --gold-bg: #fef7e0;
-      --danger: #d93025;
-      --success: #1e8e3e;
-      --bg: #f8f9fa;
-      --card-bg: #ffffff;
-      --border: #dadce0;
-      --text: #202124;
-      --text-sub: #5f6368;
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      max-width: 1050px;
-      margin: 0 auto;
-      padding: 24px 16px;
-      background-color: var(--bg);
-      color: var(--text);
-      line-height: 1.5;
-    }
-    h1 { font-size: 1.55rem; margin-bottom: 16px; }
-    h2 { font-size: 1.2rem; margin-top: 0; border-bottom: 2px solid var(--border); padding-bottom: 6px; }
-    h3 { font-size: 1rem; margin: 12px 0 6px; }
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 20px;
-      margin-bottom: 20px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .benchmark-guide {
-      background: #fffdf5;
-      border: 1px solid #fae29c;
-      border-radius: 6px;
-      padding: 14px 18px;
-      margin-bottom: 18px;
-      font-size: 0.88rem;
-    }
-    .benchmark-guide table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 8px;
-      font-size: 0.82rem;
-    }
-    .benchmark-guide th, .benchmark-guide td {
-      border: 1px solid #fce8b2;
-      padding: 6px 10px;
-      text-align: left;
-    }
-    .benchmark-guide th { background: #fef7e0; font-weight: bold; }
-    .status-ribbon {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 14px;
-      font-size: 0.85rem;
-      font-weight: bold;
-    }
-    .ribbon-target { background: var(--gold-bg); color: var(--gold); border: 1px solid #f9ab00; }
-    .ribbon-pass { background: #e6f4ea; color: var(--success); border: 1px solid #34a853; }
-    .ribbon-warn { background: #fce8e6; color: var(--danger); border: 1px solid #ea4335; }
-    .metrics-summary {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-    .metric-card {
-      background: #f8f9fa;
-      padding: 10px;
-      border-radius: 6px;
-      text-align: center;
-      border: 1px solid #e8eaed;
-      position: relative;
-    }
-    .metric-value { font-size: 1.3rem; font-weight: bold; color: var(--primary); }
-    .metric-subtag { font-size: 0.72rem; color: var(--gold); font-weight: bold; }
-    .metric-label { font-size: 0.76rem; color: var(--text-sub); margin-top: 2px; }
-    .charts-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-bottom: 16px;
-    }
-    @media (max-width: 768px) {
-      .charts-grid { grid-template-columns: 1fr; }
-    }
-    .table-container {
-      max-height: 240px;
-      overflow-y: auto;
-      margin-top: 12px;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-    }
-    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-    th, td { padding: 8px 10px; text-align: center; border-bottom: 1px solid #eee; }
-    th { background: #f1f3f4; position: sticky; top: 0; }
-    .form-group { margin-bottom: 12px; }
-    label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 0.9rem; }
-    input[type="text"], textarea {
-      width: 100%;
-      box-sizing: border-box;
-      padding: 10px;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      font-size: 0.95rem;
-    }
-    textarea { height: 130px; resize: vertical; line-height: 1.4; }
-    .video-container {
-      position: relative;
-      width: 100%;
-      max-width: 640px;
-      height: 360px;
-      margin: 0 auto 16px;
-      background: #111;
-      border-radius: 8px;
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #777;
-    }
-    video { width: 100%; height: 100%; object-fit: cover; display: none; }
-    .controls {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      margin: 16px 0;
-    }
-    button {
-      padding: 10px 24px;
-      font-size: 1rem;
-      font-weight: bold;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background-color 0.2s;
-    }
-    .btn-start { background-color: var(--primary); color: #fff; }
-    .btn-start:hover { background-color: var(--primary-hover); }
-    .btn-stop { background-color: var(--danger); color: #fff; display: none; }
-    .btn-stop:hover { background-color: var(--danger-hover); }
-    .btn-secondary { background-color: #5f6368; color: #fff; font-size: 0.85rem; padding: 6px 14px; }
-    .timer { font-size: 1.8rem; font-family: Consolas, Monaco, monospace; font-weight: bold; }
-    .status-badge {
-      font-size: 0.85rem;
-      padding: 4px 8px;
-      border-radius: 4px;
-      background: #e8f0fe;
-      color: var(--primary);
-      font-weight: bold;
-    }
-    .transcript-box {
-      background: #f1f3f4;
-      border: 1px solid #e0e0e0;
-      border-radius: 4px;
-      padding: 12px;
-      height: 85px;
-      overflow-y: auto;
-      font-size: 0.88rem;
-      line-height: 1.5;
-    }
-    .report-box {
-      white-space: pre-wrap;
-      line-height: 1.7;
-      font-size: 0.92rem;
-      background: #fafafa;
-      padding: 16px;
-      border-radius: 6px;
-      border-left: 4px solid var(--primary);
-    }
-  </style>
-</head>
-<body>
-
-  <h1>英語弁論大会 本選入賞ナビゲーター＆AIダッシュボード</h1>
-
-  <!-- 本選上位入賞基準ベンチマーク -->
-  <div class="benchmark-guide">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <strong style="font-size: 0.95rem; color: #b06000;">🏆 本選上位入賞レベル（総合85点以上 / 各項目17点以上）の到達基準</strong>
-      <span class="status-ribbon ribbon-target">本選入賞ボーダー: 85点</span>
-    </div>
-    <table>
-      <tr>
-        <th style="width: 20%;">項目（各20点）</th>
-        <th style="width: 40%;">本選入賞レベルの到達基準（17〜20点）</th>
-        <th style="width: 40%;">現状から突破するための重点アクション</th>
-      </tr>
-      <tr>
-        <td><strong>1. 単語正確性</strong></td>
-        <td>原稿再現率99%以上。冠詞や語尾（-s, -ed）の脱落が皆無。</td>
-        <td>不安な語ほど語尾を弱めがち。文末の子音まで息を吐き切る。</td>
-      </tr>
-      <tr>
-        <td><strong>2. 話速の緩急</strong></td>
-        <td>最速135 WPM（電車焦り）⇄ 最遅90 WPM（内省）の落差45 WPM以上。</td>
-        <td>一定ペース（115 WPM固定）を脱却し、感情とテンポを連動させる。</td>
-      </tr>
-      <tr>
-        <td><strong>3. 無音のタメ</strong></td>
-        <td>冒頭の引用後・結びの問いかけ前で<strong>完全な2秒の静止・沈黙</strong>を確保。</td>
-        <td>頭の中で「1、2」と数えて会場を沈黙で制圧してから次の文へ入る。</td>
-      </tr>
-      <tr>
-        <td><strong>4. セリフ表現</strong></td>
-        <td>人物（中国人女性・韓さん等）ごとに目線焦点・声色の高低を変化。</td>
-        <td>地の文のまま読まず、韓さんは穏やかな低音で語りかける。</td>
-      </tr>
-      <tr>
-        <td><strong>5. 所作・手位置</strong></td>
-        <td>80%以上「みぞおち構え」をキープ。決めのジェスチャーのみ繰り出す。</td>
-        <td>無意味な手のバタつきを完全停止。動かしたら必ずみぞおちに戻す。</td>
-      </tr>
-    </table>
-  </div>
-
-  <!-- 1. 進捗ダッシュボード -->
-  <div class="card">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <h2>本選入賞ライン比較ダッシュボード</h2>
-      <button class="btn-secondary" onclick="fetchHistoryData()">データを再読込</button>
-    </div>
-
-    <div class="metrics-summary" style="margin-top: 12px;">
-      <div class="metric-card">
-        <div class="metric-value" id="dashTotalAttempts">0</div>
-        <div class="metric-label">総練習回数</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-value" id="dashBestScore">0</div>
-        <div class="metric-subtag">基準: 85点</div>
-        <div class="metric-label">最高総合得点</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-value" id="dashRankJudge">-</div>
-        <div class="metric-label">最新の本選判定</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-value" id="dashLatestWpm">0</div>
-        <div class="metric-subtag">基準: 110-125</div>
-        <div class="metric-label">平均話速 WPM</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-value" id="dashLatestDuration">00:00</div>
-        <div class="metric-subtag">目標: 04:30</div>
-        <div class="metric-label">発表所要時間</div>
-      </div>
-    </div>
-
-    <div class="charts-grid">
-      <div style="height: 270px; background: #fff; padding: 8px; border: 1px solid #eee; border-radius: 6px;">
-        <canvas id="scoreLineChart"></canvas>
-      </div>
-      <div style="height: 270px; background: #fff; padding: 8px; border: 1px solid #eee; border-radius: 6px;">
-        <canvas id="scoreRadarChart"></canvas>
-      </div>
-    </div>
-
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th>日時</th>
-            <th>総合点</th>
-            <th>判定</th>
-            <th>単語正確性</th>
-            <th>話速の緩急</th>
-            <th>無音タメ</th>
-            <th>セリフ表現</th>
-            <th>所作・手位置</th>
-            <th>時間</th>
-            <th>WPM</th>
-          </tr>
-        </thead>
-        <tbody id="historyTableBody">
-          <tr><td colspan="10">データを読み込み中...</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- 2. 設定・原稿 -->
-  <div class="card">
-    <h2>練習設定・スピーチ原稿</h2>
-    <div class="form-group">
-      <label for="studentName">生徒氏名:</label>
-      <input type="text" id="studentName" value="生徒A" onchange="fetchHistoryData()">
-    </div>
-    <div class="form-group">
-      <label for="scriptText">原稿本文（目標時間: 4分30秒 / 115 WPM）:</label>
-      <textarea id="scriptText">Cropped Reality
-
-"Go back to your country. All Chinese people are trash." These are the harsh words someone I know often says when watching news or social media on their smartphone. To be honest, I used to agree with them.
-When I saw some viral videos of people with bad manners, I blindly believed that China was a scary and terrible place. It was easy to judge millions of people from a small screen. But every time I hear those angry words, a memory from my childhood wakes up in my heart. When I was in the fourth grade, I was taking a train back to my hometown. It was getting late, and I was feeling sleepy. When the train arrived at my station, I had to stand up in a hurry, but my favorite hat fell between the seats. "Oh no," I thought as I panicked. However, another passenger picked up my hat, dusted it off, and handed it to me with a warm, gentle smile. She said something to me, but it was in Chinese. I couldn't understand and speak Chinese, so I was shocked and frozen. All I could do was to smile back nervously and say, "Thank you," in English. But her kind eyes and warm smile stayed in my heart.
-
-Then years later, when I heard, "All Chinese people are trash," I felt a sharp pain in my chest. I thought to myself, "Was that kind woman on the train trash? No, absolutely not. Her smile was real." That experience on the train changed me. It made me want to break the barrier of language. I wanted to say, "Thank you," in her own words if I ever met her again. So, I started learning Chinese.
-
-Last year, through my grandmother and my mother, I met a Chinese lady named Han. She came to my house once to help me practice my Chinese. She was so kind. I felt so grateful, but I also felt bad when I asked her a question. "Is China a scary place?" She looked at me and answered gently, "Maybe some parts are, but not all of it." Then, she told me about the Japanese and Chinese media. "They only broadcast the bad sides of each other." Her words hit me like ice water. At that moment, I realized something important.
-
-I thought, "China is scary," based on some social media. But she didn't hate me or Japan. She looked at me simply as a person. I felt deeply ashamed of my shallow thinking, and it terrified me. Do you think we rely too much on the huge lens of a nation's news and social media?
-I don't want to look at a country and make assumptions anymore. I want to look at each person, simply as an individual human being, just like you and me. Also, as Han taught me, I will stop judging billions of people with one single label.
-
-Now, let me ask you. Will you keep looking at the cropped images? Or will you look at the real person standing right in front of you and try to understand their real voices? I hope that people all over the world will interact with one another without bias. Just like that kind woman on the train who handed me my hat, now it is our turn to cross the barrier of languages and history.</textarea>
-    </div>
-  </div>
-
-  <!-- 3. 録画測定 -->
-  <div class="card">
-    <h2>スピーチ測定・練習開始</h2>
-    <div class="video-container" id="videoContainer">
-      <div id="cameraPlaceholder">待機中（「待機モード起動」を押して英語で話し始めると自動でカメラON）</div>
-      <video id="preview" autoplay playsinline muted></video>
-    </div>
-
-    <div class="controls">
-      <button id="standbyBtn" class="btn-start">待機モード起動（音声検知スタート）</button>
-      <button id="stopBtn" class="btn-stop">スピーチ終了・評価</button>
-      <div class="timer" id="timer">04:30</div>
-      <span id="statusIndicator" class="status-badge">完全停止中</span>
-    </div>
-
-    <h3>リアルタイム書き起こし</h3>
-    <div id="liveTranscript" class="transcript-box">「待機モード起動」後、マイクに向かって話し始めると自動検知して開始します...</div>
-  </div>
-
-  <!-- 4. 審査結果 -->
-  <div id="resultCard" class="card" style="display: none;">
-    <h2>最新AI審査レポート（本選入賞レベル比較）</h2>
-    
-    <div class="metrics-summary">
-      <div class="metric-card">
-        <div class="metric-value" id="resTotalScore">-</div>
-        <div class="metric-subtag">入賞ライン: 85点</div>
-        <div class="metric-label">総合スコア</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-value" id="resScoreAccuracy">-</div>
-        <div class="metric-subtag">基準: 17点</div>
-        <div class="metric-label">単語正確性</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-value" id="resScorePacing">-</div>
-        <div class="metric-subtag">基準: 17点</div>
-        <div class="metric-label">緩急の落差</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-value" id="resScorePause">-</div>
-        <div class="metric-subtag">基準: 17点</div>
-        <div class="metric-label">無音のタメ</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-value" id="resScoreVoiceTone">-</div>
-        <div class="metric-subtag">基準: 17点</div>
-        <div class="metric-label">セリフ表現</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-value" id="resScorePosture">-</div>
-        <div class="metric-subtag">基準: 17点</div>
-        <div class="metric-label">所作・手位置</div>
-      </div>
-    </div>
-
-    <div id="evalStatus" style="font-weight: bold; margin-bottom: 12px; color: var(--primary);"></div>
-    <div id="reportContent" class="report-box"></div>
-  </div>
-
-  <script>
+<script>
     const GAS_ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbzVzu2KTA-WElihHshUicIvkYTJyQ0p3yfGEj3KwGd77cMFdygdmYfMk4FicO2uF-Bzwg/exec";
 
     const preview = document.getElementById('preview');
@@ -405,6 +27,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
     window.addEventListener('DOMContentLoaded', fetchHistoryData);
 
+    // Web Speech API の初期設定
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
@@ -424,64 +47,84 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         liveTranscriptEl.innerText = fullTranscript + interim;
         liveTranscriptEl.scrollTop = liveTranscriptEl.scrollHeight;
 
+        // 音声を検知したら本番計測へ移行
         if (isWaitingForSpeech && (fullTranscript.trim().length > 0 || interim.trim().length > 0)) {
           isWaitingForSpeech = false;
           triggerSpeechStart();
         }
       };
+
+      recognition.onerror = (e) => {
+        console.warn("Speech recognition error:", e.error);
+        // モバイルでno-speechになっても待機中なら継続
+        if (e.error === 'no-speech' && isWaitingForSpeech) {
+          try { recognition.start(); } catch(err){}
+        }
+      };
+    } else {
+      alert("お使いのブラウザは音声認識APIに対応していません。Google Chromeをご利用ください。");
     }
 
-    standbyBtn.onclick = () => {
+    // 待機モードボタン（Android対策：タップ時にカメラ・マイクを事前確保）
+    standbyBtn.onclick = async () => {
       fullTranscript = "";
-      liveTranscriptEl.innerText = "第一声を待っています... 話し始めると自動でカメラが起動しタイマーが作動します。";
-      isWaitingForSpeech = true;
-      isSpeechRunning = false;
-
-      standbyBtn.style.display = 'none';
-      stopBtn.style.display = 'inline-block';
-      statusIndicator.innerText = "第一声 検知待機中...";
-      statusIndicator.style.background = "#fef7e0";
-      statusIndicator.style.color = "#b06000";
-
-      if (recognition) {
-        try { recognition.start(); } catch(e){}
-      }
-    };
-
-    async function triggerSpeechStart() {
-      isSpeechRunning = true;
-      statusIndicator.innerText = "本番計測中（カメラON）";
-      statusIndicator.style.background = "#fce8e6";
-      statusIndicator.style.color = "var(--danger)";
-
+      liveTranscriptEl.innerText = "カメラ・マイクを準備中...";
+      
       try {
+        // 1. ユーザー操作の直後でカメラ・マイクの権限を明示的に取得（Android必須）
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
           audio: true
         });
         preview.srcObject = stream;
         preview.style.display = "block";
         cameraPlaceholder.style.display = "none";
 
+        // 2. コーデックの互換性チェック（Android対応）
+        let options = { mimeType: 'video/webm' };
+        if (MediaRecorder.isTypeSupported('video/webm; codecs=vp8,opus')) {
+          options = { mimeType: 'video/webm; codecs=vp8,opus' };
+        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+          options = { mimeType: 'video/mp4' };
+        }
+
         recordedChunks = [];
-        const mimeType = MediaRecorder.isTypeSupported('video/webm; codecs=vp9,opus')
-          ? 'video/webm; codecs=vp9,opus'
-          : 'video/webm';
-
-        mediaRecorder = new MediaRecorder(stream, {
-          mimeType: mimeType,
-          videoBitsPerSecond: 1000000
-        });
-
+        mediaRecorder = new MediaRecorder(stream, options);
         mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) recordedChunks.push(e.data);
+          if (e.data && e.data.size > 0) recordedChunks.push(e.data);
         };
-
         mediaRecorder.onstop = handleRecordingComplete;
-        mediaRecorder.start();
+
+        // 3. 待機状態へ切り替え
+        isWaitingForSpeech = true;
+        isSpeechRunning = false;
+        standbyBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-block';
+        statusIndicator.innerText = "第一声 検知待機中（話し始めると計測開始）";
+        statusIndicator.style.background = "#fef7e0";
+        statusIndicator.style.color = "#b06000";
+        liveTranscriptEl.innerText = "準備完了！第一声を待っています... 話し始めると自動でタイマーと録画が開始します。";
+
+        // 音声認識スタート
+        if (recognition) {
+          try { recognition.start(); } catch(e){}
+        }
 
       } catch (err) {
-        alert("カメラの起動に失敗しました: " + err.message);
+        alert("カメラ・マイクの起動に失敗しました。Androidの「設定」→「アプリ」→「Chrome」でカメラとマイクの権限が許可されているかご確認ください: " + err.message);
+      }
+    };
+
+    // 第一声を検知した瞬間の処理
+    function triggerSpeechStart() {
+      isSpeechRunning = true;
+      statusIndicator.innerText = "本番計測中（録画中）";
+      statusIndicator.style.background = "#fce8e6";
+      statusIndicator.style.color = "var(--danger)";
+
+      // 事前準備しておいたレコーダーを録画開始
+      if (mediaRecorder && mediaRecorder.state === 'inactive') {
+        mediaRecorder.start();
       }
 
       speechStartTime = Date.now();
@@ -496,6 +139,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }, 1000);
     }
 
+    // 終了ボタン
     stopBtn.onclick = stopSpeech;
 
     function stopSpeech() {
@@ -553,7 +197,8 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       reportContent.innerText = "";
 
       try {
-        const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+        const mimeType = mediaRecorder ? mediaRecorder.mimeType : 'video/webm';
+        const videoBlob = new Blob(recordedChunks, { type: mimeType });
         const base64Video = await blobToBase64(videoBlob);
 
         evalStatus.innerText = "【2/2】本選審査基準（厳格モード）で審査中（約30〜45秒）...";
@@ -676,9 +321,8 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     function updateCharts(history) {
       const labels = history.map((_, i) => `#${i + 1}`);
       const totalScores = history.map(h => h.totalScore);
-      const benchmarkScores = history.map(() => 85); // 85点の入賞ボーダー
+      const benchmarkScores = history.map(() => 85);
 
-      // 1. 折れ線グラフ（入賞ボーダー線つき）
       const ctxLine = document.getElementById('scoreLineChart').getContext('2d');
       if (lineChartInstance) lineChartInstance.destroy();
       lineChartInstance = new Chart(ctxLine, {
@@ -713,7 +357,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         }
       });
 
-      // 2. レーダーチャート（実測値 vs 入賞レベル17点ライン）
       const latest = history[history.length - 1];
       const ctxRadar = document.getElementById('scoreRadarChart').getContext('2d');
       if (radarChartInstance) radarChartInstance.destroy();
@@ -762,5 +405,3 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       });
     }
   </script>
-</body>
-</html>
