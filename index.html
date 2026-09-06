@@ -447,15 +447,18 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     </div>
 
     <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h3 style="margin: 0;">リアルタイム書き起こし ＆ 原稿差分ハイライト</h3>
-      <span style="font-size:0.78rem; color:var(--danger); font-weight:bold;">※審査完了後、原稿と異なる単語（誤認識・脱落）が赤字表示されます</span>
+      <h3 style="margin: 0;">リアルタイム書き起こし ＆ 発話範囲の差分ハイライト</h3>
+      <span style="font-size:0.78rem; color:var(--danger); font-weight:bold;">※実際に読まれた範囲内のみをAIが審査・赤字判定します</span>
     </div>
     <div id="liveTranscript" class="transcript-box" style="margin-top: 6px;">「待機モード起動」後、英語で話し始めると自動で文字起こしと計測が開始します...</div>
   </div>
 
   <!-- 4. 審査結果 -->
   <div id="resultCard" class="card" style="display: none;">
-    <h2>最新AI審査レポート（本選入賞レベル比較）</h2>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2>最新AI審査レポート（実発話範囲を精査）</h2>
+      <span id="readCoverageBadge" style="font-size:0.85rem; background:#e8f0fe; color:var(--primary); padding:4px 10px; border-radius:4px; font-weight:bold;">発話到達率: - %</span>
+    </div>
     
     <div class="metrics-summary">
       <div class="metric-card">
@@ -494,8 +497,8 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     <div id="progressBox" class="progress-box">
       <div class="step-tracker">
         <span id="step1" class="step-item active">① 映像エンコード</span>
-        <span id="step2" class="step-item">② AIへ転送</span>
-        <span id="step3" class="step-item">③ 審査委員長解析</span>
+        <span id="step2" class="step-item">② 発話範囲をAIへ転送</span>
+        <span id="step3" class="step-item">③ 読んだ部分を精査中</span>
         <span id="step4" class="step-item">④ 講評作成</span>
       </div>
       <div class="shimmer-progress-bar">
@@ -725,14 +728,60 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }
     }
 
-    // 【単語差分ハイライト処理】原稿と発話結果を照合し、誤り・脱落を赤字ハイライト
-    function renderDiffHighlight(originalText, recognizedText) {
+    // 【重要】実際に読まれた範囲を原稿から抽出・トリミングする関数
+    function extractSpokenRange(fullScript, recognizedText) {
+      const cleanWord = (w) => w.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, "").toLowerCase().trim();
+      
+      const scriptWords = fullScript.split(/\s+/).filter(Boolean);
+      const recWords = recognizedText.split(/\s+/).filter(Boolean);
+
+      if (recWords.length === 0) {
+        return { spokenScript: fullScript, reachIndex: 0, percentage: 0 };
+      }
+
+      // 発話の末尾5単語を使って原稿内の到達地点を特定
+      let maxMatchIndex = 0;
+      let checkTokens = recWords.slice(-6).map(cleanWord);
+
+      for (let i = 0; i < scriptWords.length; i++) {
+        const sClean = cleanWord(scriptWords[i]);
+        if (checkTokens.includes(sClean)) {
+          maxMatchIndex = Math.max(maxMatchIndex, i);
+        }
+      }
+
+      // マッチ地点から少し安全マージンを取って文末（.）を探す
+      let cutoffIndex = Math.min(scriptWords.length, maxMatchIndex + 3);
+      if (cutoffIndex < scriptWords.length) {
+        // 次のピリオドまで含める
+        for (let j = cutoffIndex; j < Math.min(scriptWords.length, cutoffIndex + 8); j++) {
+          if (scriptWords[j].includes('.')) {
+            cutoffIndex = j + 1;
+            break;
+          }
+        }
+      } else {
+        cutoffIndex = scriptWords.length;
+      }
+
+      const spokenWords = scriptWords.slice(0, cutoffIndex);
+      const percentage = Math.round((cutoffIndex / scriptWords.length) * 100);
+
+      return {
+        spokenScript: spokenWords.join(' '),
+        reachIndex: cutoffIndex,
+        percentage: percentage
+      };
+    }
+
+    // 【単語差分ハイライト処理】発話範囲内のみを対象に赤字ハイライト
+    function renderDiffHighlight(targetScript, recognizedText) {
       const cleanWord = (w) => w.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, "").toLowerCase().trim();
 
-      const origTokens = originalText.split(/\s+/).filter(Boolean);
+      const origTokens = targetScript.split(/\s+/).filter(Boolean);
       const recTokens = recognizedText.split(/\s+/).filter(Boolean);
 
-      let html = '<div style="margin-bottom:8px; font-weight:bold; color:var(--primary);">【発音正確性チェック結果】<span style="font-weight:normal; font-size:0.85rem; color:#d93025; margin-left:8px;">赤字: 誤認識・言い間違い / 取消線: 原稿脱落</span></div>';
+      let html = '<div style="margin-bottom:8px; font-weight:bold; color:var(--primary);">【発話範囲の正確性チェック結果】<span style="font-weight:normal; font-size:0.85rem; color:#d93025; margin-left:8px;">赤字: 誤認識・言い間違い / 取消線: 原稿脱落</span></div>';
       
       let origIdx = 0;
 
@@ -742,11 +791,9 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         const oClean = cleanWord(oWord);
 
         if (rClean === oClean) {
-          // 一致
           html += `<span class="diff-match">${rWord}</span> `;
           origIdx++;
         } else {
-          // 先の単語を探す（脱落があるか）
           let matchedAhead = -1;
           for (let k = 1; k <= 4; k++) {
             if (origTokens[origIdx + k] && cleanWord(origTokens[origIdx + k]) === rClean) {
@@ -756,7 +803,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           }
 
           if (matchedAhead !== -1) {
-            // 抜かしてしまった単語を取消線で表示
             for (let m = 0; m < matchedAhead; m++) {
               html += `<span class="diff-omitted">${origTokens[origIdx]}</span> `;
               origIdx++;
@@ -764,7 +810,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
             html += `<span class="diff-match">${rWord}</span> `;
             origIdx++;
           } else {
-            // 原稿と一致しない（誤認識または言い間違い）➔ 赤字ハイライト
             html += `<span class="diff-mismatch">${rWord}</span> `;
           }
         }
@@ -910,7 +955,14 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       const wordCount = finalFullText.split(/\s+/).filter(Boolean).length;
       const wpm = elapsedMinutes > 0 ? Math.round(wordCount / elapsedMinutes) : 0;
 
+      const fullScript = document.getElementById('scriptText').value;
+      
+      // 🚨 発話された範囲の原稿と到達割合を自動判定
+      const rangeData = extractSpokenRange(fullScript, finalFullText);
+
       document.getElementById('resultCard').style.display = 'block';
+      document.getElementById('readCoverageBadge').innerText = `発話到達率: 約${rangeData.percentage}%（実発話部分のみ審査）`;
+      
       const reportContent = document.getElementById('reportContent');
       reportContent.style.display = 'none';
       reportContent.innerHTML = "";
@@ -924,13 +976,11 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         const base64Video = await blobToBase64(videoBlob);
 
         // ステップ2
-        setStep(2, "【ステップ2/4】Gemini審査エンジンへ動画・音声を転送中...");
+        setStep(2, `【ステップ2/4】発話された区間（到達率${rangeData.percentage}%）をAIへ転送中...`);
 
         setTimeout(() => {
-          setStep(3, "【ステップ3/4】審査委員長AIが動画・所作・緩急・タメを精査中...");
+          setStep(3, "【ステップ3/4】審査委員長AIが発話された範囲の技術を精査中...");
         }, 3500);
-
-        const originalScript = document.getElementById('scriptText').value;
 
         const res = await fetch(GAS_ENDPOINT_URL, {
           method: 'POST',
@@ -941,7 +991,9 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
             duration: elapsedSec,
             wpm: wpm,
             wordCount: wordCount,
-            script: originalScript,
+            script: fullScript,
+            spokenScript: rangeData.spokenScript, // 読まれた部分の原稿
+            progressRate: rangeData.percentage,
             transcript: finalFullText,
             videoBase64: base64Video
           })
@@ -965,8 +1017,8 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           document.getElementById('resScoreVoiceTone').innerText = data.scores.scoreVoiceTone;
           document.getElementById('resScorePosture').innerText = data.scores.scorePosture;
 
-          // 🚨 ここで誤認識・脱落単語の赤字ハイライトを適用！
-          liveTranscriptEl.innerHTML = renderDiffHighlight(originalScript, finalFullText);
+          // 発話された範囲内だけを対象に差分ハイライト
+          liveTranscriptEl.innerHTML = renderDiffHighlight(rangeData.spokenScript, finalFullText);
 
           reportContent.innerHTML = renderReportWithModelButtons(data.report);
           reportContent.style.display = 'block';
