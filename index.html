@@ -774,9 +774,84 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }
     }
 
-    function cleanWord(w) {
-      return (w || "").replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, "").toLowerCase().trim();
+    // 短縮形・表記揺れを正規化
+    function normalizeToken(token) {
+      if (!token) return "";
+      let s = token.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'’]/g, "").trim();
+      const contractions = {
+        "cant": "cannot",
+        "couldnt": "couldnot",
+        "dont": "donot",
+        "doesnt": "doesnot",
+        "didnt": "didnot",
+        "wont": "willnot",
+        "wouldnt": "wouldnot",
+        "isnt": "isnot",
+        "arent": "arenot",
+        "wasnt": "wasnot",
+        "werent": "werenot",
+        "havent": "havenot",
+        "hasnt": "hasnot",
+        "hadnt": "hadnot",
+        "im": "i am",
+        "youre": "you are",
+        "theyre": "they are",
+        "weare": "we are",
+        "ive": "i have",
+        "youve": "you have",
+        "theyve": "they have"
+      };
+      return contractions[s] || s;
     }
+
+    // 編集距離（レーベンシュタイン距離）の計算
+    function levenshteinDistance(a, b) {
+      if (!a || !b) return (a || "").length + (b || "").length;
+      const matrix = [];
+      for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+      for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+
+      for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+          if (b.charAt(i - 1) === a.charAt(j - 1)) {
+            matrix[i][j] = matrix[i - 1][j - 1];
+          } else {
+            matrix[i][j] = Math.min(
+              matrix[i - 1][j - 1] + 1,
+              matrix[i][j - 1] + 1,
+              matrix[i - 1][j] + 1
+            );
+          }
+        }
+      }
+      return matrix[b.length][a.length];
+    }
+
+    // 寛容な単語一致判定（語尾変化、1〜2文字違いを許容）
+    function isFuzzyMatch(w1, w2) {
+      const n1 = normalizeToken(w1);
+      const n2 = normalizeToken(w2);
+      if (!n1 || !n2) return false;
+      if (n1 === n2) return true;
+
+      // 短縮形展開の部分一致
+      if (n1.includes(n2) || n2.includes(n1)) return true;
+
+      // 語尾変化（-s, -ed, -ing, -ly）の許容
+      const stripEndings = (str) => str.replace(/(s|es|ed|ing|ly|d)$/, "");
+      if (stripEndings(n1) === stripEndings(n2) && stripEndings(n1).length >= 3) return true;
+
+      // 長さに応じた編集距離の許容（5文字以上なら2文字違いまでOK、3文字以上なら1文字違いまでOK）
+      const maxLen = Math.max(n1.length, n2.length);
+      const dist = levenshteinDistance(n1, n2);
+      if (maxLen >= 6 && dist <= 2) return true;
+      if (maxLen >= 4 && dist <= 1) return true;
+
+      return false;
+    }
+
+    // 頻出する機能語（ストップワード）判定
+    const STOP_WORDS = new Set(["the", "a", "an", "to", "of", "in", "and", "or", "for", "on", "at", "by", "with", "from", "i", "it", "my", "we"]);
 
     // 発話到達地点を原稿から抽出
     function extractSpokenRange(fullScript, recognizedText) {
@@ -788,16 +863,17 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }
 
       let maxMatchIndex = 0;
-      let checkTokens = recWords.slice(-6).map(cleanWord);
+      let checkTokens = recWords.slice(-8);
 
       for (let i = 0; i < scriptWords.length; i++) {
-        const sClean = cleanWord(scriptWords[i]);
-        if (checkTokens.includes(sClean)) {
-          maxMatchIndex = Math.max(maxMatchIndex, i);
+        for (const rWord of checkTokens) {
+          if (!STOP_WORDS.has(normalizeToken(rWord)) && isFuzzyMatch(scriptWords[i], rWord)) {
+            maxMatchIndex = Math.max(maxMatchIndex, i);
+          }
         }
       }
 
-      let cutoffIndex = Math.min(scriptWords.length, maxMatchIndex + 3);
+      let cutoffIndex = Math.min(scriptWords.length, maxMatchIndex + 4);
       if (cutoffIndex < scriptWords.length) {
         for (let j = cutoffIndex; j < Math.min(scriptWords.length, cutoffIndex + 8); j++) {
           if (scriptWords[j].includes('.')) {
@@ -819,16 +895,16 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       };
     }
 
-    // 【新設】フレーズ単位の丸ごとスキップも確実に拾い上げる差分アライメントエンジン
+    // 【ファジー・寛容判定版】差分ハイライト描画エンジン
     function renderDiffHighlight(targetScript, recognizedText) {
       const origTokens = targetScript.split(/\s+/).filter(Boolean);
       const recTokens = recognizedText.split(/\s+/).filter(Boolean);
 
       let html = `
         <div class="diff-legend">
-          <span style="font-weight:bold; color:var(--primary);">【発話正確性の解析結果】</span>
-          <span><span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>word</span> = スキップ・脱落した単語（文・フレーズ）</span>
-          <span><span class="diff-mismatch"><span class="diff-mismatch-badge">誤検知</span>word</span> = 誤認識・言い間違い</span>
+          <span style="font-weight:bold; color:var(--primary);">【発話正確性の解析結果（適度な寛容判定）】</span>
+          <span><span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>word</span> = 文中で飛ばされた単語・フレーズ</span>
+          <span><span class="diff-mismatch"><span class="diff-mismatch-badge">誤検知</span>word</span> = 発音崩れ・誤認識</span>
         </div>
         <div style="line-height:2.2;">
       `;
@@ -836,62 +912,66 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       let origIdx = 0;
       let recIdx = 0;
 
-      // 原稿と発話の双方を進めながらアライメントを行う
       while (recIdx < recTokens.length && origIdx < origTokens.length) {
         const rWord = recTokens[recIdx];
-        const rClean = cleanWord(rWord);
         const oWord = origTokens[origIdx];
-        const oClean = cleanWord(oWord);
 
-        if (rClean === oClean) {
-          // 完全一致
+        // 1. まず現在位置でファジー一致するかチェック
+        if (isFuzzyMatch(oWord, rWord)) {
+          html += `<span class="diff-match">${rWord}</span> `;
+          origIdx++;
+          recIdx++;
+          continue;
+        }
+
+        // 2. 一致しない場合、前方の原稿を探索（最大20単語先まで）
+        let jumpToOrigIdx = -1;
+        const maxSearch = Math.min(origTokens.length, origIdx + 20);
+
+        for (let k = origIdx + 1; k < maxSearch; k++) {
+          if (isFuzzyMatch(origTokens[k], rWord)) {
+            // 単語が機能語（the, a, to等）の場合は、次の単語も一致しているか確認して誤判定防止
+            if (STOP_WORDS.has(normalizeToken(rWord))) {
+              if (k + 1 < origTokens.length && recIdx + 1 < recTokens.length) {
+                if (isFuzzyMatch(origTokens[k + 1], recTokens[recIdx + 1])) {
+                  jumpToOrigIdx = k;
+                  break;
+                }
+              }
+            } else {
+              // 実質語なら一致として採用
+              jumpToOrigIdx = k;
+              break;
+            }
+          }
+        }
+
+        if (jumpToOrigIdx !== -1) {
+          // 飛ばされた間にある原稿単語を【未発音】バッジとして出力
+          for (let m = origIdx; m < jumpToOrigIdx; m++) {
+            html += `<span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>${origTokens[m]}</span> `;
+          }
+          origIdx = jumpToOrigIdx;
+          // 一致した単語を出力
           html += `<span class="diff-match">${rWord}</span> `;
           origIdx++;
           recIdx++;
         } else {
-          // 先の原稿（最大25単語先まで：長文フレーズ・1文丸ごとスキップに対応）を探索
-          let foundAheadAt = -1;
-          const searchLimit = Math.min(origTokens.length, origIdx + 25);
+          // 原稿の先にも見つからない場合は、発話側の誤認識として扱う
+          html += `<span class="diff-mismatch"><span class="diff-mismatch-badge">誤検知</span>${rWord}</span> `;
+          recIdx++;
           
-          for (let k = origIdx + 1; k < searchLimit; k++) {
-            if (cleanWord(origTokens[k]) === rClean) {
-              // 連続一致の確証（次の単語も合致しているか）をチェックして誤爆を防止
-              if (k + 1 < origTokens.length && recIdx + 1 < recTokens.length) {
-                if (cleanWord(origTokens[k + 1]) === cleanWord(recTokens[recIdx + 1])) {
-                  foundAheadAt = k;
-                  break;
-                }
-              }
-              if (foundAheadAt === -1) foundAheadAt = k;
-            }
-          }
-
-          if (foundAheadAt !== -1) {
-            // フレーズまたは単語が丸ごと飛ばされたことを検知！
-            // 飛ばされた区間の原稿単語をすべて【未発音】バッジとして出力
-            for (let m = origIdx; m < foundAheadAt; m++) {
-              html += `<span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>${origTokens[m]}</span> `;
-            }
-            origIdx = foundAheadAt;
-            // スキップ直後の合致単語を出力
-            html += `<span class="diff-match">${rWord}</span> `;
-            origIdx++;
-            recIdx++;
-          } else {
-            // 原稿の先にも見つからない場合は、発音の崩れ・誤認識と判定
-            html += `<span class="diff-mismatch"><span class="diff-mismatch-badge">誤検知</span>${rWord}</span> `;
-            recIdx++;
-            // 軽微なズレの場合、原稿側も1単語進める
-            if (recIdx < recTokens.length && origIdx + 1 < origTokens.length) {
-              if (cleanWord(recTokens[recIdx]) === cleanWord(origTokens[origIdx + 1])) {
-                origIdx++;
-              }
+          // 原稿側も1単語先を見て同期のズレを解消
+          if (recIdx < recTokens.length && origIdx + 1 < origTokens.length) {
+            if (isFuzzyMatch(origTokens[origIdx + 1], recTokens[recIdx])) {
+              html += `<span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>${origTokens[origIdx]}</span> `;
+              origIdx++;
             }
           }
         }
       }
 
-      // 残りの発話テキスト（認識された語）があれば出力
+      // 残りの認識テキストがあれば誤検知として出力
       while (recIdx < recTokens.length) {
         html += `<span class="diff-mismatch"><span class="diff-mismatch-badge">誤検知</span>${recTokens[recIdx]}</span> `;
         recIdx++;
@@ -1093,7 +1173,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           document.getElementById('resScoreVoiceTone').innerText = data.scores.scoreVoiceTone;
           document.getElementById('resScorePosture').innerText = data.scores.scorePosture;
 
-          // フレーズスキップに対応した差分描画を反映
+          // 寛容判定エンジンによる差分ハイライトを反映
           liveTranscriptEl.innerHTML = renderDiffHighlight(rangeData.spokenScript, finalFullText);
 
           reportContent.innerHTML = renderReportWithModelButtons(data.report);
