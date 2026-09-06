@@ -345,7 +345,7 @@
   <div class="benchmark-guide">
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <strong style="font-size: 0.95rem; color: #b06000;">🏆 本選上位入賞レベル（総合85点以上 / 各項目17点以上）の到達基準</strong>
-      <span class="status-ribbon ribbon-target">本選入賞ボーダー: 85点</span>
+      <span class="status-ribbon ribbon-target">大会制限時間: 05:00 (300秒) / 85点ボーダー</span>
     </div>
     <table>
       <tr>
@@ -409,7 +409,7 @@
       </div>
       <div class="metric-card">
         <div class="metric-value" id="dashLatestDuration">00:00</div>
-        <div class="metric-subtag">目標: 04:30</div>
+        <div class="metric-subtag">目標: 05:00</div>
         <div class="metric-label">発表所要時間</div>
       </div>
     </div>
@@ -454,7 +454,7 @@
       <input type="text" id="studentName" value="生徒A" onchange="fetchHistoryData()">
     </div>
     <div class="form-group">
-      <label for="scriptText">原稿本文（目標時間: 4分30秒 / 115 WPM）:</label>
+      <label for="scriptText">原稿本文（目標時間: 5分00秒 / 115 WPM）:</label>
       <textarea id="scriptText">Cropped Reality
 
 "Go back to your country. All Chinese people are trash." These are the harsh words someone I know often says when watching news or social media on their smartphone. To be honest, I used to agree with them.
@@ -484,7 +484,8 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       <button id="manualStartBtn" class="btn-now">今すぐ計測開始（手動）</button>
       <button id="stopBtn" class="btn-stop">スピーチ終了・評価</button>
       <button id="testAudioBtn" type="button" class="btn-secondary" onclick="testDirectTTS()">🔊 TTSタメ＋再開テスト</button>
-      <div class="timer" id="timer">04:30</div>
+      <!-- 制限時間を 05:00 (300秒) に更新 -->
+      <div class="timer" id="timer">05:00</div>
       <span id="statusIndicator" class="status-badge">停止中</span>
     </div>
 
@@ -576,7 +577,8 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
     let accumulatedText = "";
 
-    const TARGET_DURATION = 270;
+    // 制限時間を 5分00秒（300秒）に設定
+    const TARGET_DURATION = 300;
     let timeLeft = TARGET_DURATION;
     let timerInterval = null;
     let speechStartTime = 0;
@@ -634,7 +636,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+          video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 15 } },
           audio: false
         });
 
@@ -642,11 +644,11 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         preview.style.display = "block";
         cameraPlaceholder.style.display = "none";
 
-        let options = { mimeType: 'video/webm' };
+        let options = { mimeType: 'video/webm', videoBitsPerSecond: 200000 };
         if (MediaRecorder.isTypeSupported('video/webm; codecs=vp8')) {
-          options = { mimeType: 'video/webm; codecs=vp8' };
+          options = { mimeType: 'video/webm; codecs=vp8', videoBitsPerSecond: 200000 };
         } else if (MediaRecorder.isTypeSupported('video/mp4')) {
-          options = { mimeType: 'video/mp4' };
+          options = { mimeType: 'video/mp4', videoBitsPerSecond: 200000 };
         }
 
         recordedChunks = [];
@@ -770,37 +772,20 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }
     }
 
-    // 短縮形・表記揺れを正規化
     function normalizeToken(token) {
       if (!token) return "";
       let s = token.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'’]/g, "").trim();
       const contractions = {
-        "cant": "cannot",
-        "couldnt": "couldnot",
-        "dont": "donot",
-        "doesnt": "doesnot",
-        "didnt": "didnot",
-        "wont": "willnot",
-        "wouldnt": "wouldnot",
-        "isnt": "isnot",
-        "arent": "arenot",
-        "wasnt": "wasnot",
-        "werent": "werenot",
-        "havent": "havenot",
-        "hasnt": "hasnot",
-        "hadnt": "hadnot",
-        "im": "i am",
-        "youre": "you are",
-        "theyre": "they are",
-        "weare": "we are",
-        "ive": "i have",
-        "youve": "you have",
+        "cant": "cannot", "couldnt": "couldnot", "dont": "donot", "doesnt": "doesnot",
+        "didnt": "didnot", "wont": "willnot", "wouldnt": "wouldnot", "isnt": "isnot",
+        "arent": "arenot", "wasnt": "wasnot", "werent": "werenot", "havent": "havenot",
+        "hasnt": "hasnot", "hadnt": "hadnot", "im": "i am", "youre": "you are",
+        "theyre": "they are", "weare": "we are", "ive": "i have", "youve": "you have",
         "theyve": "they have"
       };
       return contractions[s] || s;
     }
 
-    // 編集距離
     function levenshteinDistance(a, b) {
       if (!a || !b) return (a || "").length + (b || "").length;
       const matrix = [];
@@ -823,7 +808,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       return matrix[b.length][a.length];
     }
 
-    // 寛容な単語一致判定
     function isFuzzyMatch(w1, w2) {
       const n1 = normalizeToken(w1);
       const n2 = normalizeToken(w2);
@@ -845,11 +829,9 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
     const STOP_WORDS = new Set(["the", "a", "an", "to", "of", "in", "and", "or", "for", "on", "at", "by", "with", "from", "i", "it", "my", "we"]);
 
-    // 【新設】原稿からタイトル行を除外して本文のみを抽出する関数
     function getBodyScript(rawScript) {
       const lines = rawScript.split('\n').map(l => l.trim()).filter(Boolean);
       if (lines.length > 1) {
-        // 1行目が短く（10単語未満）、ピリオドで終わっていない場合はタイトルとみなして除外
         const firstLineWords = lines[0].split(/\s+/).filter(Boolean);
         if (firstLineWords.length <= 8 && !lines[0].endsWith('.')) {
           return lines.slice(1).join('\n');
@@ -858,7 +840,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       return rawScript;
     }
 
-    // 発話到達地点を原稿から抽出（本文のみ対象）
     function extractSpokenRange(fullScript, recognizedText) {
       const bodyScript = getBodyScript(fullScript);
       const scriptWords = bodyScript.split(/\s+/).filter(Boolean);
@@ -901,7 +882,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       };
     }
 
-    // 差分ハイライト描画エンジン（タイトルを除外した本文で照合）
     function renderDiffHighlight(targetScript, recognizedText) {
       const bodyTarget = getBodyScript(targetScript);
       const origTokens = bodyTarget.split(/\s+/).filter(Boolean);
@@ -1129,7 +1109,14 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       try {
         const mimeType = mediaRecorder ? mediaRecorder.mimeType : 'video/webm';
         const videoBlob = new Blob(recordedChunks, { type: mimeType });
-        const base64Video = await blobToBase64(videoBlob);
+        
+        let base64Video = "";
+        // 5分間の長尺スピーチでも通信エラーにならないよう安全サイズ（15MB未満）をガード
+        if (videoBlob.size < 15 * 1024 * 1024) {
+          base64Video = await blobToBase64(videoBlob);
+        } else {
+          console.warn("動画サイズが上限を超えたため、通信エラー回避のため音声テキスト優先で送信します");
+        }
 
         setStep(2, `【ステップ2/4】発話された区間（到達率${rangeData.percentage}%）をAIへ転送中...`);
 
@@ -1171,7 +1158,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           document.getElementById('resScoreVoiceTone').innerText = data.scores.scoreVoiceTone;
           document.getElementById('resScorePosture').innerText = data.scores.scorePosture;
 
-          // 本文から照合した差分結果を描画
           liveTranscriptEl.innerHTML = renderDiffHighlight(rangeData.spokenScript, finalFullText);
 
           reportContent.innerHTML = renderReportWithModelButtons(data.report);
