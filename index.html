@@ -1,400 +1,649 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
- <meta charset="UTF-8">
- <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>英語スピーチ暗記マスター</title>
- <style>
- body { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background-color: #f4f6f9; }
- .container { background-color: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
- h1 { color: #2c3e50; text-align: center; margin-top: 0; font-size: 24px; }
- .controls { display: flex; flex-wrap: wrap; gap: 15px; align-items: center; background-color: #eef2f7; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
- select, button { font-size: 16px; padding: 10px 15px; border-radius: 6px; border: 1px solid #ccc; }
- button { background-color: #3498db; color: white; border: none; cursor: pointer; font-weight: bold; }
- button:hover { background-color: #2980b9; }
- #mic-btn { background-color: #2ecc71; }
- #mic-btn:hover { background-color: #27ae60; }
- .phrase-group { display: flex; gap: 4px; align-items: center; background-color: #fff; padding: 4px; border-radius: 8px; border: 1px solid #ddd; }
- .phrase-group button { background-color: #f39c12; padding: 10px 12px; border-radius: 6px; }
- .phrase-group button:hover { background-color: #e67e22; }
- #play-phrase-btn { min-width: 130px; text-align: center; }
- #mic-phrase-btn { background-color: #2ecc71; margin-left: 10px; }
- #mic-phrase-btn:hover { background-color: #27ae60; }
- .slider-container { display: flex; align-items: center; gap: 10px; flex-grow: 1; min-width: 250px; }
- input[type=range] { flex-grow: 1; }
- #text-display { font-size: 20px; line-height: 1.8; padding: 20px; border: 2px solid #e0e0e0; border-radius: 8px; min-height: 200px; background-color: #fafafa; white-space: pre-wrap; word-wrap: break-word; }
- #feedback-display { margin-top: 20px; padding: 20px; background-color: #fff3cd; border-radius: 8px; border: 2px dashed #ffc107; display: none; font-size: 18px; line-height: 1.6; }
- .correct-word { color: #27ae60; font-weight: bold; }
- .wrong-word { color: #e74c3c; text-decoration: underline; }
- .advice-box { background-color: #ffffff; padding: 15px; border-radius: 8px; border-left: 5px solid #3498db; margin-top: 15px; font-size: 16px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
- .loading-text { color: #888; font-style: italic; }
- .history-section { margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px; }
- table { width: 100%; border-collapse: collapse; margin-top: 10px; }
- th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
- th { background-color: #f8f9fa; }
- .clear-btn { background-color: #e74c3c; font-size: 14px; padding: 5px 10px; float: right; }
- .clear-btn:hover { background-color: #c0392b; }
- </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>英語弁論大会 練習＆AI評価ダッシュボード</title>
+  <!-- Chart.js（進捗グラフ描画用） -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --primary: #1a73e8;
+      --primary-hover: #1557b0;
+      --danger: #d93025;
+      --danger-hover: #b31412;
+      --bg: #f8f9fa;
+      --card-bg: #ffffff;
+      --border: #dadce0;
+      --text: #202124;
+      --text-sub: #5f6368;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 24px 16px;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    h1 { font-size: 1.6rem; margin-bottom: 20px; }
+    h2 { font-size: 1.25rem; margin-top: 0; border-bottom: 2px solid var(--border); padding-bottom: 6px; }
+    h3 { font-size: 1.05rem; margin: 12px 0 6px; }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .form-group { margin-bottom: 12px; }
+    label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 0.9rem; }
+    input[type="text"], textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.95rem;
+    }
+    textarea { height: 140px; resize: vertical; line-height: 1.4; }
+    .video-container {
+      position: relative;
+      width: 100%;
+      max-width: 640px;
+      margin: 0 auto 16px;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    video { width: 100%; display: block; }
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin: 16px 0;
+    }
+    button {
+      padding: 10px 24px;
+      font-size: 1rem;
+      font-weight: bold;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .btn-start { background-color: var(--primary); color: #fff; }
+    .btn-start:hover { background-color: var(--primary-hover); }
+    .btn-stop { background-color: var(--danger); color: #fff; display: none; }
+    .btn-stop:hover { background-color: var(--danger-hover); }
+    .btn-secondary { background-color: #5f6368; color: #fff; font-size: 0.85rem; padding: 6px 14px; }
+    .timer {
+      font-size: 1.8rem;
+      font-family: Consolas, Monaco, monospace;
+      font-weight: bold;
+    }
+    .status-badge {
+      font-size: 0.85rem;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: #e8f0fe;
+      color: var(--primary);
+      font-weight: bold;
+    }
+    .transcript-box {
+      background: #f1f3f4;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      padding: 12px;
+      height: 100px;
+      overflow-y: auto;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+    .report-box {
+      white-space: pre-wrap;
+      line-height: 1.7;
+      font-size: 0.95rem;
+      background: #fafafa;
+      padding: 16px;
+      border-radius: 6px;
+      border-left: 4px solid var(--primary);
+    }
+    .metrics-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .metric-card {
+      background: #f8f9fa;
+      padding: 12px;
+      border-radius: 6px;
+      text-align: center;
+      border: 1px solid #e8eaed;
+    }
+    .metric-value { font-size: 1.4rem; font-weight: bold; color: var(--primary); }
+    .metric-label { font-size: 0.8rem; color: var(--text-sub); }
+    .table-container {
+      max-height: 250px;
+      overflow-y: auto;
+      margin-top: 15px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { padding: 8px 12px; text-align: center; border-bottom: 1px solid #eee; }
+    th { background: #f1f3f4; position: sticky; top: 0; }
+  </style>
 </head>
 <body>
 
-<div class="container">
- <h1>英語スピーチ暗記マスター (AIアドバイス搭載版)</h1>
+  <h1>英語弁論大会 練習＆AI評価ダッシュボード</h1>
 
- <div class="controls">
- <label for="para-select"><b>段落:</b></label>
- <select id="para-select" onchange="changeParagraph()">
- <option value="0">第1段落</option>
- <option value="1">第2段落</option>
- <option value="2">第3段落</option>
- <option value="3">第4段落</option>
- <option value="4">第5段落</option>
- </select>
+  <!-- 1. 進捗ダッシュボード（過去履歴・グラフ） -->
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h2>練習進捗ダッシュボード</h2>
+      <button class="btn-secondary" onclick="fetchHistoryData()">データを再読込</button>
+    </div>
 
- <label for="speed-select"><b>速度:</b></label>
- <select id="speed-select">
- <option value="0.5">0.5x (とてもゆっくり)</option>
- <option value="0.7">0.7x (ゆっくり)</option>
- <option value="0.85" selected>0.85x (ややゆっくり)</option>
- <option value="1.0">1.0x (標準)</option>
- <option value="1.2">1.2x (少し速い)</option>
- </select>
+    <div class="metrics-summary" style="margin-top: 15px;">
+      <div class="metric-card">
+        <div class="metric-value" id="dashTotalAttempts">0</div>
+        <div class="metric-label">総練習回数</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value" id="dashBestScore">0</div>
+        <div class="metric-label">最高総合スコア</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value" id="dashLatestWpm">0</div>
+        <div class="metric-label">最新WPM (目安115)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value" id="dashLatestDuration">00:00</div>
+        <div class="metric-label">最新所要時間 (目安04:30)</div>
+      </div>
+    </div>
 
- <button onclick="playAudio()" id="play-all-btn">🔊 全体を再生</button>
+    <!-- スコア推移グラフ -->
+    <div style="width: 100%; height: 260px; margin-bottom: 15px;">
+      <canvas id="scoreChart"></canvas>
+    </div>
 
- <div class="phrase-group">
- <button onclick="playPhrase(-1)" title="前の文に戻る">⏮</button>
- <button onclick="playPhrase(0)" id="play-phrase-btn">🔊 フレーズ再生</button>
- <button onclick="playPhrase(1)" title="次の文に進む">⏭</button>
- <button id="mic-phrase-btn" onclick="toggleMic(true)">🎤 1文テスト</button>
- </div>
+    <!-- 過去履歴テーブル -->
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>日時</th>
+            <th>総合点</th>
+            <th>構成</th>
+            <th>話速</th>
+            <th>表現</th>
+            <th>正確さ</th>
+            <th>所要時間</th>
+            <th>WPM</th>
+          </tr>
+        </thead>
+        <tbody id="historyTableBody">
+          <tr><td colspan="8">データを読み込み中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 
- <button id="mic-btn" onclick="toggleMic(false)">🎤 段落全体をテスト</button>
+  <!-- 2. 設定・原稿確認 -->
+  <div class="card">
+    <h2>練習設定・原稿確認</h2>
+    <div class="form-group">
+      <label for="studentName">生徒氏名:</label>
+      <input type="text" id="studentName" value="生徒A" onchange="fetchHistoryData()">
+    </div>
+    <div class="form-group">
+      <label for="scriptText">スピーチ原稿（目標: 4分30秒 / 115 WPM）:</label>
+      <textarea id="scriptText">Cropped Reality
 
- <div class="slider-container">
- <label for="mask-slider"><b>虫食い:</b></label>
- <input type="range" id="mask-slider" min="0" max="100" value="0" oninput="updateText()">
- <span id="slider-value">0%</span>
- </div>
- </div>
+"Go back to your country. All Chinese people are trash." These are the harsh words someone I know often says when watching news or social media on their smartphone. To be honest, I used to agree with them.
+When I saw some viral videos of people with bad manners, I blindly believed that China was a scary and terrible place. It was easy to judge millions of people from a small screen. But every time I hear those angry words, a memory from my childhood wakes up in my heart. When I was in the fourth grade, I was taking a train back to my hometown. It was getting late, and I was feeling sleepy. When the train arrived at my station, I had to stand up in a hurry, but my favorite hat fell between the seats. "Oh no," I thought as I panicked. However, another passenger picked up my hat, dusted it off, and handed it to me with a warm, gentle smile. She said something to me, but it was in Chinese. I couldn't understand and speak Chinese, so I was shocked and frozen. All I could do was to smile back nervously and say, "Thank you," in English. But her kind eyes and warm smile stayed in my heart.
 
- <div id="text-display"></div>
- <div id="feedback-display"></div>
+Then years later, when I heard, "All Chinese people are trash," I felt a sharp pain in my chest. I thought to myself, "Was that kind woman on the train trash? No, absolutely not. Her smile was real." That experience on the train changed me. It made me want to break the barrier of language. I wanted to say, "Thank you," in her own words if I ever met her again. So, I started learning Chinese.
 
- <div class="history-section">
- <h2>📊 学習の記録 <button class="clear-btn" onclick="clearHistory()">履歴をリセット</button></h2>
- <table>
- <thead>
- <tr>
- <th>日時</th>
- <th>対象</th>
- <th>虫食い率</th>
- <th>正答率</th>
- </tr>
- </thead>
- <tbody id="history-table-body">
- </tbody>
- </table>
- </div>
-</div>
+Last year, through my grandmother and my mother, I met a Chinese lady named Han. She came to my house once to help me practice my Chinese. She was so kind. I felt so grateful, but I also felt bad when I asked her a question. "Is China a scary place?" She looked at me and answered gently, "Maybe some parts are, but not all of it." Then, she told me about the Japanese and Chinese media. "They only broadcast the bad sides of each other." Her words hit me like ice water. At that moment, I realized something important.
 
-<script>
-// ★GASでデプロイした最新のウェブアプリURLをここに貼り付けてください
-const GAS_WEB_APP_URL = "YOUR_GAS_WEB_APP_URL_HERE";
+I thought, "China is scary," based on some social media. But she didn't hate me or Japan. She looked at me simply as a person. I felt deeply ashamed of my shallow thinking, and it terrified me. Do you think we rely too much on the huge lens of a nation's news and social media?
+I don't want to look at a country and make assumptions anymore. I want to look at each person, simply as an individual human being, just like you and me. Also, as Han taught me, I will stop judging billions of people with one single label.
 
-const paragraphs = [
- '\"Go back to your country. All Chinese people are trash.\" These are the harsh words someone I know often says when watching news or social media on their smartphone. To be honest, I used to agree with them.',
- 'When I saw some viral videos of people with bad manners, I blindly believed that China was a scary and terrible place. It was easy to judge millions of people from a small screen. But every time I hear those angry words, a memory from my childhood wakes up in my heart. When I was in the fourth grade, I was taking a train back to my hometown. It was getting late, and I was feeling sleepy. When the train arrived at my station, I had to stand up in a hurry, but my favorite hat fell between the seats. \"Oh no,\" I thought as I panicked. However, another passenger picked up my hat, dusted it off, and handed it to me with a warm, gentle smile. She said something to me, but it was in Chinese. I couldn\'t understand and speak Chinese, so I was shocked and frozen. All I could do was to smile back nervously and say, \"Thank you,\" in English. But her kind eyes and warm smile stayed in my heart.',
- 'Then years later when I heard, \"All Chinese people are trash,\" I felt a sharp pain in my chest. I thought to myself, \"Was that kind woman on the train trash? No, absolutely not. Her smile was real.\" That experience on the train changed me. It made me want to break the barrier of language. I wanted to say, \"Thank you,\" in her own words if I ever met her again. So, I started learning Chinese.',
- 'Last year, through my grandmother and my mother, I met a Chinese lady named Han. She came to my house once to help me practice my Chinese. She was so kind. I felt so grateful, but I also felt bad when I asked her a question. \"Is China a scary place?\" She looked at me and answered gently, \"Maybe some parts are, but not all of it.\" Then, she told me about the Japanese and Chinese media. \"They only broadcast the bad sides of each other.\" Her words hit me like ice water. At that moment, I realized something important. I thought, \"China is scary,\" based on some social media. But she didn\'t hate me or Japan. She looked at me simply as a person. I felt deeply ashamed of my shallow thinking, and it terrified me. Do you think we rely too much on the huge lens of a nation\'s news and social media?',
- 'I don\'t want to look at a country and make assumptions anymore. I want to look at each person, simply as an individual human being, just like you and me. Also, as Han taught me, I will stop judging billions of people with one single label. Now, let me ask you. Will you keep looking at the cropped images? Or will you look at the real person standing right in front of you and try to understand their real voices? I hope that people all over the world will interact with one another without bias. Just like that kind woman on the train who handed me my hat, now it is our turn to cross the barrier of languages and history.'
-];
+Now, let me ask you. Will you keep looking at the cropped images? Or will you look at the real person standing right in front of you and try to understand their real voices? I hope that people all over the world will interact with one another without bias. Just like that kind woman on the train who handed me my hat, now it is our turn to cross the barrier of languages and history.</textarea>
+    </div>
+  </div>
 
-let currentParaIndex = 0;
-let recognition = null;
-let isListening = false;
-let isTestingPhrase = false;
-let currentSentenceIndex = 0;
-let sentences = [];
-let displayMode = 'paragraph'; 
-let currentAudio = null;
+  <!-- 3. スピーチ測定・カメラ -->
+  <div class="card">
+    <h2>スピーチ測定・練習開始</h2>
+    <div class="video-container">
+      <video id="preview" autoplay playsinline muted></video>
+    </div>
 
-function changeParagraph() {
- currentParaIndex = parseInt(document.getElementById('para-select').value);
- document.getElementById('mask-slider').value = 0;
- document.getElementById('feedback-display').style.display = 'none';
- currentSentenceIndex = 0;
- sentences = [];
- displayMode = 'paragraph'; 
- document.getElementById('play-phrase-btn').innerText = "🔊 フレーズ再生";
- updateText();
+    <div class="controls">
+      <button id="startBtn" class="btn-start">スピーチ開始（録画・認識）</button>
+      <button id="stopBtn" class="btn-stop">スピーチ終了・評価</button>
+      <div class="timer" id="timer">04:30</div>
+      <span id="statusIndicator" class="status-badge">待機中</span>
+    </div>
+
+    <h3>発話内容のリアルタイム書き起こし</h3>
+    <div id="liveTranscript" class="transcript-box">マイクに向かって話し始めると、ここに英語テキストが表示されます...</div>
+  </div>
+
+  <!-- 4. 最新の審査レポート -->
+  <div id="resultCard" class="card" style="display: none;">
+    <h2>最新のAI審査レポート</h2>
+    
+    <div class="metrics-summary">
+      <div class="metric-card">
+        <div class="metric-value" id="resTotalScore">-</div>
+        <div class="metric-label">総合スコア（100点）</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value" id="resDuration">0:00</div>
+        <div class="metric-label">発表時間（目標4:30）</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value" id="resWpm">0</div>
+        <div class="metric-label">平均話速 WPM</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value" id="resWordCount">0</div>
+        <div class="metric-label">認識語数</div>
+      </div>
+    </div>
+
+    <div id="evalStatus" style="font-weight: bold; margin-bottom: 12px; color: var(--primary);"></div>
+    <div id="reportContent" class="report-box"></div>
+  </div>
+
+  <script>
+    // 指定されたGAS Web App URL & APIキー
+    const GAS_ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbywXzAJUebftkdQaiSnVAzY4WSVPYZuFxzJ4I-W6fw1NaQy0tUF9ECLHOYXZB4SdkBK7Q/exec";
+    const GEMINI_API_KEY = "AIzaSyAMDnC6YnQ0R6hb4vLbWgQvAhU6u0A-DYI";
+
+    const preview = document.getElementById('preview');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const timerEl = document.getElementById('timer');
+    const statusIndicator = document.getElementById('statusIndicator');
+    const liveTranscriptEl = document.getElementById('liveTranscript');
+
+    let stream, mediaRecorder;
+    let recordedChunks = [];
+    let recognition;
+    let fullTranscript = "";
+    const TARGET_DURATION = 270; // 4分30秒 (270秒)
+    let timeLeft = TARGET_DURATION;
+    let timerInterval;
+    let speechStartTime;
+    let scoreChartInstance = null;
+
+    // カメラ・マイクの初期化
+    navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: true
+    }).then(s => {
+      stream = s;
+      preview.srcObject = s;
+    }).catch(err => {
+      console.warn("Camera/Mic access warning:", err);
+    });
+
+    // Web Speech API（リアルタイム音声認識）
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onresult = (event) => {
+        let interim = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            fullTranscript += event.results[i][0].transcript + " ";
+          } else {
+            interim += event.results[i][0].transcript;
+          }
+        }
+        liveTranscriptEl.innerText = fullTranscript + interim;
+        liveTranscriptEl.scrollTop = liveTranscriptEl.scrollHeight;
+      };
+    }
+
+    // 開始処理
+    startBtn.onclick = () => {
+      recordedChunks = [];
+      fullTranscript = "";
+      timeLeft = TARGET_DURATION;
+      liveTranscriptEl.innerText = "";
+      document.getElementById('resultCard').style.display = 'none';
+
+      const mimeType = MediaRecorder.isTypeSupported('video/webm; codecs=vp9,opus')
+        ? 'video/webm; codecs=vp9,opus'
+        : 'video/webm';
+
+      mediaRecorder = new MediaRecorder(stream, {
+        mimeType: mimeType,
+        videoBitsPerSecond: 1000000 // 1Mbps (容量抑制)
+      });
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordedChunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = handleRecordingComplete;
+      mediaRecorder.start();
+
+      if (recognition) {
+        try { recognition.start(); } catch(e){}
+      }
+
+      speechStartTime = Date.now();
+      startBtn.style.display = 'none';
+      stopBtn.style.display = 'inline-block';
+      statusIndicator.innerText = "本番録画中";
+      statusIndicator.style.background = "#fce8e6";
+      statusIndicator.style.color = "var(--danger)";
+
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        const m = String(Math.floor(timeLeft / 60)).padStart(2, '0');
+        const s = String(timeLeft % 60).padStart(2, '0');
+        timerEl.innerText = `${m}:${s}`;
+
+        if (timeLeft <= 0) stopSpeech();
+      }, 1000);
+    };
+
+    stopBtn.onclick = stopSpeech;
+
+    function stopSpeech() {
+      clearInterval(timerInterval);
+      if (recognition) {
+        try { recognition.stop(); } catch(e){}
+      }
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      }
+
+      startBtn.style.display = 'inline-block';
+      stopBtn.style.display = 'none';
+      statusIndicator.innerText = "解析準備中";
+      statusIndicator.style.background = "#e8f0fe";
+      statusIndicator.style.color = "var(--primary)";
+    }
+
+    async function handleRecordingComplete() {
+      const elapsedSec = Math.round((Date.now() - speechStartTime) / 1000);
+      const elapsedMinutes = elapsedSec / 60;
+      const wordCount = fullTranscript.trim().split(/\s+/).filter(Boolean).length;
+      const wpm = elapsedMinutes > 0 ? Math.round(wordCount / elapsedMinutes) : 0;
+
+      document.getElementById('resultCard').style.display = 'block';
+      const m = Math.floor(elapsedSec / 60);
+      const s = String(elapsedSec % 60).padStart(2, '0');
+      document.getElementById('resDuration').innerText = `${m}:${s}`;
+      document.getElementById('resWpm').innerText = wpm;
+      document.getElementById('resWordCount').innerText = wordCount;
+
+      const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+      await evaluateWithGemini(videoBlob, elapsedSec, wpm, wordCount);
+    }
+
+    async function evaluateWithGemini(videoBlob, elapsedSec, wpm, wordCount) {
+      const evalStatus = document.getElementById('evalStatus');
+      const reportContent = document.getElementById('reportContent');
+      const script = document.getElementById('scriptText').value;
+
+      try {
+        // 1. Gemini File API へ動画アップロード
+        evalStatus.innerText = "【1/3】動画データをGemini APIに送信中...";
+        const uploadRes = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: {
+            'X-Goog-Upload-Command': 'start, upload, finalize',
+            'X-Goog-Upload-Header-Content-Length': videoBlob.size.toString(),
+            'X-Goog-Upload-Header-Content-Type': 'video/webm',
+            'Content-Type': 'video/webm'
+          },
+          body: videoBlob
+        });
+
+        if (!uploadRes.ok) throw new Error("動画アップロードに失敗しました");
+        const fileData = await uploadRes.json();
+        const fileUri = fileData.file.uri;
+
+        // 2. 審査プロンプト
+        evalStatus.innerText = "【2/3】審査員AIが映像・音声・原稿を精査採点中...";
+        const prompt = `
+あなたは長野県英語弁論大会（中・高校生英語スピーチコンテスト県大会）の本選審査員です。
+添付された生徒のスピーチ動画、事前登録原稿、リアルタイム書き起こし、計測データを比較精査し、詳細な審査レポートを作成してください。
+
+【目標設定】
+・目標時間: 4分30秒（270秒）
+・目標話速: 110〜125 WPM（黄金ペース）
+
+【計測データ】
+・実測発表時間: ${elapsedSec} 秒
+・実測話速: ${wpm} WPM
+・実測語数: ${wordCount} 語
+
+【事前登録原稿】
+${script}
+
+【音声認識書き起こし】
+${fullTranscript}
+
+【必須スコアリング出力ルール】
+講評文の冒頭に、必ず以下のJSONブロックを正確に出力してください（プログラムで自動パースするため）。
+\`\`\`json
+{
+  "totalScore": 85,
+  "scoreContent": 22,
+  "scoreDelivery": 21,
+  "scoreExpression": 21,
+  "scoreAccuracy": 21
 }
+\`\`\`
+※各スコアは25点満点、totalScoreは100点満点です。
 
-function updateText() {
- const maskRatio = parseInt(document.getElementById('mask-slider').value) / 100;
- document.getElementById('slider-value').innerText = Math.round(maskRatio * 100) + "%";
- 
- let text = "";
- if (displayMode === 'phrase') {
- if (sentences.length === 0) extractSentences();
- text = sentences[currentSentenceIndex];
- } else {
- text = paragraphs[currentParaIndex];
- }
- 
- if (maskRatio === 0) {
- document.getElementById('text-display').innerText = text;
- return;
- }
- 
- const tokens = text.match(/[\w']+|[^\w\s]+|\s+/g) || [];
- const wordIndices = [];
- tokens.forEach(function(token, index) { if (/[\w']+/.test(token)) wordIndices.push(index); });
- const hideCount = Math.floor(wordIndices.length * maskRatio);
- const shuffled = wordIndices.slice().sort(function() { return 0.5 - Math.random(); });
- const indicesToHide = new Set(shuffled.slice(0, hideCount));
- let displayText = "";
- tokens.forEach(function(token, index) {
- displayText += indicesToHide.has(index) ? " ____ " : token;
- });
- document.getElementById('text-display').innerText = displayText;
-}
+【審査項目】
+1. Content & Organization (25点): 構成、説得力、メッセージ性
+2. Delivery & Rhythm (25点): 4分30秒ペース、ポーズ（タメ）、抑揚
+3. Expression & Gestures (25点): アイコンタクト率、手の位置（胸〜みぞおち）、表情
+4. Accuracy (25点): 原稿一致度、正確さ
 
-function extractSentences() {
- const text = paragraphs[currentParaIndex];
- const matched = text.match(/[^.?!]+[.?!]+["']?/g);
- if (matched) {
- sentences = matched.map(function(s) { return s.trim(); });
- } else {
- sentences = [text];
- }
-}
+JSONブロックに続けて、タイムスタンプ付きの講評・改善アドバイスを日本語のMarkdownで記述してください。
+`;
 
-async function playAudioAPI(text, btnId, defaultText) {
- if (currentAudio) {
- currentAudio.pause();
- currentAudio = null;
- }
- window.speechSynthesis.cancel();
- 
- const btn = document.getElementById(btnId);
- btn.innerText = "⏳ 読込中...";
+        const evalRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: prompt },
+                { file_data: { mime_type: "video/webm", file_uri: fileUri } }
+              ]
+            }]
+          })
+        });
 
- if (GAS_WEB_APP_URL.startsWith("http")) {
- try {
- const response = await fetch(GAS_WEB_APP_URL, {
- method: 'POST',
- headers: { 'Content-Type': 'text/plain' }, // CORS回避のためtext/plainに設定
- body: JSON.stringify({ action: 'getAudio', text: text })
- });
- const data = await response.json();
- 
- if (data.audioContent) {
- currentAudio = new Audio("data:audio/mp3;base64," + data.audioContent);
- currentAudio.playbackRate = parseFloat(document.getElementById('speed-select').value);
- currentAudio.play();
- currentAudio.onended = () => { btn.innerText = defaultText; };
- return; // 成功したらここで終了
- } else if (data.error) {
- alert("【GASからのエラー報告】\n" + data.error);
- }
- } catch (error) {
- alert("【通信エラー】\nGASと正しく通信できませんでした。URLが間違っているか、GAS側のデプロイ設定が「全員」になっていない可能性があります。\n詳細: " + error.message);
- }
- }
- 
- // エラーが起きた場合のみブラウザ音声（ロボット）になる
- btn.innerText = defaultText;
- const utterance = new SpeechSynthesisUtterance(text);
- utterance.lang = 'en-US';
- utterance.rate = parseFloat(document.getElementById('speed-select').value);
- window.speechSynthesis.speak(utterance);
-}
+        if (!evalRes.ok) throw new Error("AI審査レポートの生成に失敗しました");
+        const evalData = await evalRes.json();
+        const fullReport = evalData.candidates[0].content.parts[0].text;
 
-function playPhrase(direction) {
- if (sentences.length === 0) extractSentences();
- currentSentenceIndex += direction;
- if (currentSentenceIndex < 0) currentSentenceIndex = sentences.length - 1;
- if (currentSentenceIndex >= sentences.length) currentSentenceIndex = 0;
+        // JSONスコアの抽出
+        let scores = { totalScore: 80, scoreContent: 20, scoreDelivery: 20, scoreExpression: 20, scoreAccuracy: 20 };
+        const jsonMatch = fullReport.match(/```json\s*([\s\S]*?)\s*```/);
+        if (jsonMatch) {
+          try { scores = JSON.parse(jsonMatch[1]); } catch(e){}
+        }
 
- displayMode = 'phrase'; 
- updateText(); 
- 
- const sentenceToPlay = sentences[currentSentenceIndex];
- const defaultText = "🔊 " + (currentSentenceIndex + 1) + "/" + sentences.length + "文目";
- playAudioAPI(sentenceToPlay, 'play-phrase-btn', defaultText);
-}
+        document.getElementById('resTotalScore').innerText = scores.totalScore;
+        reportContent.innerText = fullReport;
+        evalStatus.innerText = "【3/3】スプレッドシートへ保存中...";
 
-function playAudio() {
- displayMode = 'paragraph'; 
- updateText(); 
- const text = paragraphs[currentParaIndex];
- playAudioAPI(text, 'play-all-btn', "🔊 全体を再生");
-}
+        // 3. GASスプレッドシートへPOST
+        await fetch(GAS_ENDPOINT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            name: document.getElementById('studentName').value,
+            date: new Date().toLocaleString('ja-JP'),
+            totalScore: scores.totalScore,
+            scoreContent: scores.scoreContent,
+            scoreDelivery: scores.scoreDelivery,
+            scoreExpression: scores.scoreExpression,
+            scoreAccuracy: scores.scoreAccuracy,
+            duration: elapsedSec,
+            wpm: wpm,
+            wordCount: wordCount,
+            report: fullReport
+          })
+        });
 
-function toggleMic(phraseMode) {
- if (!recognition) {
- if (!initSpeechRecognition()) return;
- }
- if (isListening) {
- recognition.stop();
- return;
- }
- isTestingPhrase = phraseMode;
- if (isTestingPhrase && sentences.length === 0) {
- extractSentences();
- document.getElementById('play-phrase-btn').innerText = "🔊 " + (currentSentenceIndex + 1) + "/" + sentences.length + "文目";
- }
- displayMode = isTestingPhrase ? 'phrase' : 'paragraph';
- updateText();
- recognition.start();
-}
+        evalStatus.innerText = "審査完了・スプレッドシート保存完了！";
+        // ダッシュボード更新
+        fetchHistoryData();
 
-function initSpeechRecognition() {
- const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
- if (!SpeechRecognition) {
- alert("お使いのブラウザはマイクでの音声認識に対応していません。Chromeでお試しください。");
- return false;
- }
- recognition = new SpeechRecognition();
- recognition.lang = 'en-US';
- recognition.interimResults = false;
- recognition.continuous = false;
+      } catch (err) {
+        evalStatus.innerText = "エラー: " + err.message;
+        reportContent.innerText = "エラーが発生しました。コンソールログをご確認ください。";
+      }
+    }
 
- recognition.onstart = function() {
- isListening = true;
- const btnId = isTestingPhrase ? 'mic-phrase-btn' : 'mic-btn';
- const btn = document.getElementById(btnId);
- btn.innerText = "⏹️ 録音を停止して判定";
- btn.style.backgroundColor = "#e74c3c";
- 
- const feedback = document.getElementById('feedback-display');
- feedback.style.display = 'block';
- feedback.innerHTML = `<strong>🎤 聞き取り中... ${isTestingPhrase ? "1文" : "段落全体"}を英語で発音してください。</strong>`;
- };
+    // ダッシュボード用データ取得 (GAS GET)
+    async function fetchHistoryData() {
+      const studentName = document.getElementById('studentName').value.trim();
+      const tbody = document.getElementById('historyTableBody');
+      tbody.innerHTML = '<tr><td colspan="8">最新データを読み込み中...</td></tr>';
 
- recognition.onresult = function(event) {
- evaluateSpeech(event.results[0][0].transcript);
- };
+      try {
+        const url = `${GAS_ENDPOINT_URL}?studentName=${encodeURIComponent(studentName)}`;
+        const res = await fetch(url);
+        const data = await res.json();
 
- recognition.onerror = function(event) {
- const feedback = document.getElementById('feedback-display');
- feedback.style.display = 'block';
- feedback.innerHTML = '<span style="color:red;">⚠️ エラーが発生しました: ' + event.error + '</span>';
- };
+        if (data.status === "success" && data.history) {
+          renderDashboard(data.history);
+        } else {
+          tbody.innerHTML = '<tr><td colspan="8">練習データがまだありません。</td></tr>';
+        }
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8">データ取得エラー: ${err.message}</td></tr>`;
+      }
+    }
 
- recognition.onend = function() {
- isListening = false;
- document.getElementById('mic-phrase-btn').innerText = "🎤 1文テスト";
- document.getElementById('mic-phrase-btn').style.backgroundColor = "#2ecc71";
- document.getElementById('mic-btn').innerText = "🎤 段落全体をテスト";
- document.getElementById('mic-btn').style.backgroundColor = "#2ecc71";
- };
- return true;
-}
+    // ダッシュボード画面描画
+    function renderDashboard(history) {
+      const tbody = document.getElementById('historyTableBody');
+      tbody.innerHTML = "";
 
-function evaluateSpeech(recognizedText) {
- let originalText = isTestingPhrase ? sentences[currentSentenceIndex] : paragraphs[currentParaIndex];
- const tokens = originalText.match(/[\w']+|[^\w\s]+|\s+/g) || [];
- const normRec = recognizedText.toLowerCase().replace(/[.,!?;:"]/g, '').split(/\s+/);
+      if (history.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8">練習データがまだありません。</td></tr>';
+        document.getElementById('dashTotalAttempts').innerText = "0";
+        document.getElementById('dashBestScore').innerText = "0";
+        document.getElementById('dashLatestWpm').innerText = "0";
+        document.getElementById('dashLatestDuration').innerText = "00:00";
+        return;
+      }
 
- let html = "";
- let recIndex = 0;
- let correctCount = 0;
- let totalWords = 0;
- let missedWords = [];
+      // 指標計算
+      document.getElementById('dashTotalAttempts').innerText = history.length;
+      const best = Math.max(...history.map(h => h.totalScore));
+      document.getElementById('dashBestScore').innerText = best;
+      const latest = history[history.length - 1];
+      document.getElementById('dashLatestWpm').innerText = latest.wpm;
+      document.getElementById('dashLatestDuration').innerText = latest.durationFormatted;
 
- tokens.forEach(function(token) {
- if (/[\w']+/.test(token)) {
- totalWords++;
- let cleanToken = token.toLowerCase();
- let found = false;
- for (let i = recIndex; i < Math.min(recIndex + 5, normRec.length); i++) {
- if (normRec[i] === cleanToken) { found = true; recIndex = i + 1; break; }
- }
- if (found) {
- html += '<span class="correct-word">' + token + '</span>';
- correctCount++;
- } else {
- html += '<span class="wrong-word">' + token + '</span>';
- missedWords.push(token);
- }
- } else {
- html += token;
- }
- });
+      // テーブル生成（新しい順）
+      const reversed = [...history].reverse();
+      reversed.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.date}</td>
+          <td><strong>${row.totalScore}</strong></td>
+          <td>${row.scoreContent}</td>
+          <td>${row.scoreDelivery}</td>
+          <td>${row.scoreExpression}</td>
+          <td>${row.scoreAccuracy}</td>
+          <td>${row.durationFormatted}</td>
+          <td>${row.wpm}</td>
+        `;
+        tbody.appendChild(tr);
+      });
 
- const score = totalWords > 0 ? Math.round((correctCount / totalWords) * 100) : 0;
- const maskRatio = document.getElementById('slider-value').innerText;
- let targetLabel = isTestingPhrase ? `段落${currentParaIndex + 1} (${currentSentenceIndex + 1}文目)` : `段落${currentParaIndex + 1} (全体)`;
+      // グラフ更新
+      updateChart(history);
+    }
 
- document.getElementById('feedback-display').innerHTML = 
- '<p><b>🗣️ あなたの声:</b><br>' + recognizedText + '</p>' +
- '<p><b>📝 判定結果（正答率: ' + score + '%）:</b></p>' +
- '<p style="margin-bottom: 20px;">' + html + '</p>' +
- '<div class="advice-box" id="advice-box-content"><span class="loading-text">🔄 データをGASに送信中... 過去の弱点からアドバイスを生成しています...</span></div>';
+    // グラフ描画（Chart.js）
+    function updateChart(history) {
+      const ctx = document.getElementById('scoreChart').getContext('2d');
+      const labels = history.map((_, i) => `#${i + 1}`);
+      const totalScores = history.map(h => h.totalScore);
+      const deliveryScores = history.map(h => h.scoreDelivery);
+      const expressionScores = history.map(h => h.scoreExpression);
 
- saveHistory(targetLabel, maskRatio, score);
- fetchAdviceFromGAS(targetLabel, score, missedWords);
-}
+      if (scoreChartInstance) {
+        scoreChartInstance.destroy();
+      }
 
-async function fetchAdviceFromGAS(paragraph, score, missedWords) {
- if (!GAS_WEB_APP_URL.startsWith("http")) return;
- 
- try {
- const response = await fetch(GAS_WEB_APP_URL, {
- method: 'POST',
- headers: { 'Content-Type': 'text/plain' },
- body: JSON.stringify({ action: 'saveAndAdvice', paragraph: paragraph, score: score, missedWords: missedWords })
- });
- const data = await response.json();
- if(data.advice) {
- document.getElementById('advice-box-content').innerHTML = 
- '<p style="margin-top: 0;"><b>💬 分析とアドバイス:</b></p>' + 
- '<p>' + data.advice.replace(/\n/g, '<br>') + '</p>';
- }
- } catch (e) {
- console.error(e);
- }
-}
+      scoreChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: '総合得点 (100点満点)',
+              data: totalScores,
+              borderColor: '#1a73e8',
+              backgroundColor: 'rgba(26, 115, 232, 0.1)',
+              borderWidth: 3,
+              tension: 0.3,
+              fill: true
+            },
+            {
+              label: 'デリバリー・話速 (25点)',
+              data: deliveryScores,
+              borderColor: '#34a853',
+              borderWidth: 2,
+              borderDash: [5, 5],
+              tension: 0.3
+            },
+            {
+              label: 'ジェスチャー・表情 (25点)',
+              data: expressionScores,
+              borderColor: '#fbbc04',
+              borderWidth: 2,
+              borderDash: [5, 5],
+              tension: 0.3
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { min: 0, max: 100 }
+          }
+        }
+      });
+    }
 
-function saveHistory(targetLabel, maskRatio, score) {
- let history = JSON.parse(localStorage.getItem('speechMasterHistory')) || [];
- const now = new Date();
- const record = {
- date: now.toLocaleDateString() + ' ' + now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0'),
- paragraph: targetLabel,
- mask: maskRatio,
- score: score + '%'
- };
- history.unshift(record);
- localStorage.setItem('speechMasterHistory', JSON.stringify(history));
- loadHistory();
-}
-
-function loadHistory() {
- const history = JSON.parse(localStorage.getItem('speechMasterHistory')) || [];
- const tbody = document.getElementById('history-table-body');
- tbody.innerHTML = '';
- if (history.length === 0) {
- tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">記録はありません。</td></tr>';
- return;
- }
- history.slice(0, 10).forEach(function(record) {
- const row = '<tr><td>' + record.date + '</td><td>' + record.paragraph + '</td><td>' + record.mask + '</td><td>' + (parseInt(record.score) >= 80 ? '🌟 ' : '') + record.score + '</td></tr>';
- tbody.innerHTML += row;
- });
-}
-
-function clearHistory() {
- if (confirm('学習履歴をすべて消去しますか？')) {
- localStorage.removeItem('speechMasterHistory');
- loadHistory();
- }
-}
-
-updateText();
-loadHistory();
-</script>
+    // ページ読み込み時に履歴を取得
+    window.addEventListener('DOMContentLoaded', fetchHistoryData);
+  </script>
 </body>
 </html>
