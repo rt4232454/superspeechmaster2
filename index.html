@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>英語弁論大会 練習＆AI評価ダッシュボード</title>
-  <!-- Chart.js（進捗グラフ描画用） -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
@@ -53,12 +52,17 @@
       position: relative;
       width: 100%;
       max-width: 640px;
+      height: 360px;
       margin: 0 auto 16px;
-      background: #000;
+      background: #111;
       border-radius: 8px;
       overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #777;
     }
-    video { width: 100%; display: block; }
+    video { width: 100%; height: 100%; object-fit: cover; display: none; }
     .controls {
       display: flex;
       align-items: center;
@@ -222,19 +226,20 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
   <!-- 3. スピーチ測定・カメラ -->
   <div class="card">
     <h2>スピーチ測定・練習開始</h2>
-    <div class="video-container">
+    <div class="video-container" id="videoContainer">
+      <div id="cameraPlaceholder">待機中（「待機モード起動」を押して英語で話し始めると自動でカメラON）</div>
       <video id="preview" autoplay playsinline muted></video>
     </div>
 
     <div class="controls">
-      <button id="startBtn" class="btn-start">スピーチ開始（録画・認識）</button>
+      <button id="standbyBtn" class="btn-start">待機モード起動（音声検知スタート）</button>
       <button id="stopBtn" class="btn-stop">スピーチ終了・評価</button>
       <div class="timer" id="timer">04:30</div>
-      <span id="statusIndicator" class="status-badge">待機中</span>
+      <span id="statusIndicator" class="status-badge">完全停止中</span>
     </div>
 
     <h3>発話内容のリアルタイム書き起こし</h3>
-    <div id="liveTranscript" class="transcript-box">マイクに向かって話し始めると、ここに英語テキストが表示されます...</div>
+    <div id="liveTranscript" class="transcript-box">「待機モード起動」を押した後、マイクに向かって話し始めると自動検知して開始します...</div>
   </div>
 
   <!-- 4. 最新の審査レポート -->
@@ -265,39 +270,33 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
   </div>
 
   <script>
-    // GASエンドポイントURL & APIキー
     const GAS_ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbywXzAJUebftkdQaiSnVAzY4WSVPYZuFxzJ4I-W6fw1NaQy0tUF9ECLHOYXZB4SdkBK7Q/exec";
-    const GEMINI_API_KEY = "AIzaSyAMDnC6YnQ0R6hb4vLbWgQvAhU6u0A-DYI";
 
     const preview = document.getElementById('preview');
-    const startBtn = document.getElementById('startBtn');
+    const cameraPlaceholder = document.getElementById('cameraPlaceholder');
+    const standbyBtn = document.getElementById('standbyBtn');
     const stopBtn = document.getElementById('stopBtn');
     const timerEl = document.getElementById('timer');
     const statusIndicator = document.getElementById('statusIndicator');
     const liveTranscriptEl = document.getElementById('liveTranscript');
 
-    let stream, mediaRecorder;
+    let stream = null;
+    let mediaRecorder = null;
     let recordedChunks = [];
-    let recognition;
+    let recognition = null;
+    let isWaitingForSpeech = false;
+    let isSpeechRunning = false;
+
     let fullTranscript = "";
-    const TARGET_DURATION = 270; // 4分30秒 (270秒)
+    const TARGET_DURATION = 270; // 4分30秒
     let timeLeft = TARGET_DURATION;
-    let timerInterval;
-    let speechStartTime;
+    let timerInterval = null;
+    let speechStartTime = 0;
     let scoreChartInstance = null;
 
-    // カメラ・マイク初期化
-    navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: true
-    }).then(s => {
-      stream = s;
-      preview.srcObject = s;
-    }).catch(err => {
-      console.warn("Camera/Mic access warning:", err);
-    });
+    window.addEventListener('DOMContentLoaded', fetchHistoryData);
 
-    // Web Speech API
+    // Web Speech API（音声検知用）
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
@@ -316,44 +315,71 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         }
         liveTranscriptEl.innerText = fullTranscript + interim;
         liveTranscriptEl.scrollTop = liveTranscriptEl.scrollHeight;
+
+        if (isWaitingForSpeech && (fullTranscript.trim().length > 0 || interim.trim().length > 0)) {
+          isWaitingForSpeech = false;
+          triggerSpeechStart();
+        }
       };
     }
 
-    // 開始処理
-    startBtn.onclick = () => {
-      recordedChunks = [];
+    // 待機モードボタン
+    standbyBtn.onclick = () => {
       fullTranscript = "";
-      timeLeft = TARGET_DURATION;
-      liveTranscriptEl.innerText = "";
-      document.getElementById('resultCard').style.display = 'none';
+      liveTranscriptEl.innerText = "第一声を待っています... 話し始めると自動でカメラが起動しタイマーが作動します。";
+      isWaitingForSpeech = true;
+      isSpeechRunning = false;
 
-      const mimeType = MediaRecorder.isTypeSupported('video/webm; codecs=vp9,opus')
-        ? 'video/webm; codecs=vp9,opus'
-        : 'video/webm';
-
-      mediaRecorder = new MediaRecorder(stream, {
-        mimeType: mimeType,
-        videoBitsPerSecond: 1000000 // 1Mbps
-      });
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) recordedChunks.push(e.data);
-      };
-
-      mediaRecorder.onstop = handleRecordingComplete;
-      mediaRecorder.start();
+      standbyBtn.style.display = 'none';
+      stopBtn.style.display = 'inline-block';
+      statusIndicator.innerText = "第一声 検知待機中...";
+      statusIndicator.style.background = "#fef7e0";
+      statusIndicator.style.color = "#b06000";
 
       if (recognition) {
         try { recognition.start(); } catch(e){}
       }
+    };
 
-      speechStartTime = Date.now();
-      startBtn.style.display = 'none';
-      stopBtn.style.display = 'inline-block';
-      statusIndicator.innerText = "本番録画中";
+    // 声検知でカメラ・タイマー起動
+    async function triggerSpeechStart() {
+      isSpeechRunning = true;
+      statusIndicator.innerText = "本番計測中（カメラON）";
       statusIndicator.style.background = "#fce8e6";
       statusIndicator.style.color = "var(--danger)";
 
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: true
+        });
+        preview.srcObject = stream;
+        preview.style.display = "block";
+        cameraPlaceholder.style.display = "none";
+
+        recordedChunks = [];
+        const mimeType = MediaRecorder.isTypeSupported('video/webm; codecs=vp9,opus')
+          ? 'video/webm; codecs=vp9,opus'
+          : 'video/webm';
+
+        mediaRecorder = new MediaRecorder(stream, {
+          mimeType: mimeType,
+          videoBitsPerSecond: 1000000
+        });
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = handleRecordingComplete;
+        mediaRecorder.start();
+
+      } catch (err) {
+        alert("カメラの起動に失敗しました: " + err.message);
+      }
+
+      speechStartTime = Date.now();
+      timeLeft = TARGET_DURATION;
       timerInterval = setInterval(() => {
         timeLeft--;
         const m = String(Math.floor(timeLeft / 60)).padStart(2, '0');
@@ -362,27 +388,40 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
         if (timeLeft <= 0) stopSpeech();
       }, 1000);
-    };
+    }
 
+    // 終了ボタン
     stopBtn.onclick = stopSpeech;
 
     function stopSpeech() {
+      isWaitingForSpeech = false;
+      isSpeechRunning = false;
       clearInterval(timerInterval);
+
       if (recognition) {
         try { recognition.stop(); } catch(e){}
       }
+
       if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
       }
 
-      startBtn.style.display = 'inline-block';
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      preview.srcObject = null;
+      preview.style.display = "none";
+      cameraPlaceholder.style.display = "block";
+      cameraPlaceholder.innerText = "カメラ停止中（GAS審査処理中）";
+
+      standbyBtn.style.display = 'inline-block';
       stopBtn.style.display = 'none';
-      statusIndicator.innerText = "解析準備中";
+      statusIndicator.innerText = "計測完了・解析送信中";
       statusIndicator.style.background = "#e8f0fe";
       statusIndicator.style.color = "var(--primary)";
     }
 
-    // BlobをBase64文字列に変換
     function blobToBase64(blob) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -408,121 +447,43 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       document.getElementById('resWpm').innerText = wpm;
       document.getElementById('resWordCount').innerText = wordCount;
 
-      const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
-      await evaluateWithGemini(videoBlob, elapsedSec, wpm, wordCount);
-    }
-
-    // Gemini API Direct Fetch
-    async function evaluateWithGemini(videoBlob, elapsedSec, wpm, wordCount) {
       const evalStatus = document.getElementById('evalStatus');
       const reportContent = document.getElementById('reportContent');
-      const script = document.getElementById('scriptText').value;
+      evalStatus.innerText = "【1/2】動画データを変換中...";
+      reportContent.innerText = "";
 
       try {
-        evalStatus.innerText = "【1/3】動画データをBase64変換中...";
+        const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
         const base64Video = await blobToBase64(videoBlob);
 
-        evalStatus.innerText = "【2/3】審査員AIが映像・音声・原稿を精査採点中（30〜60秒）...";
-        const prompt = `
-あなたは長野県英語弁論大会（中・高校生英語スピーチコンテスト県大会）の本選審査員です。
-添付された生徒のスピーチ動画、事前登録原稿、リアルタイム書き起こし、計測データを比較精査し、詳細な審査レポートを作成してください。
+        evalStatus.innerText = "【2/2】GAS経由でGemini審査・採点中（30〜60秒）...";
 
-【目標設定】
-・目標時間: 4分30秒（270秒）
-・目標話速: 110〜125 WPM（黄金ペース）
-
-【計測データ】
-・実測発表時間: ${elapsedSec} 秒
-・実測話速: ${wpm} WPM
-・実測語数: ${wordCount} 語
-
-【事前登録原稿】
-${script}
-
-【音声認識書き起こし】
-${fullTranscript}
-
-【必須スコアリング出力ルール】
-講評文の冒頭に、必ず以下のJSONブロックを正確に出力してください（プログラムで自動パースするため）。
-\`\`\`json
-{
-  "totalScore": 85,
-  "scoreContent": 22,
-  "scoreDelivery": 21,
-  "scoreExpression": 21,
-  "scoreAccuracy": 21
-}
-\`\`\`
-※各スコアは25点満点、totalScoreは100点満点です。
-
-【審査項目】
-1. Content & Organization (25点): 構成、説得力、メッセージ性
-2. Delivery & Rhythm (25点): 4分30秒ペース、ポーズ（タメ）、抑揚
-3. Expression & Gestures (25点): アイコンタクト率、手の位置（胸〜みぞおち）、表情
-4. Accuracy (25点): 原稿一致度、正確さ
-
-JSONブロックに続けて、タイムスタンプ付きの講評・改善アドバイスを日本語のMarkdownで記述してください。
-`;
-
-        // Direct Fetch (inline_data)
-        const evalRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { text: prompt },
-                {
-                  inline_data: {
-                    mime_type: "video/webm",
-                    data: base64Video
-                  }
-                }
-              ]
-            }]
-          })
-        });
-
-        if (!evalRes.ok) {
-          const errDetail = await evalRes.text();
-          throw new Error("AI審査APIエラー: " + errDetail);
-        }
-
-        const evalData = await evalRes.json();
-        const fullReport = evalData.candidates[0].content.parts[0].text;
-
-        // JSONスコアの抽出
-        let scores = { totalScore: 80, scoreContent: 20, scoreDelivery: 20, scoreExpression: 20, scoreAccuracy: 20 };
-        const jsonMatch = fullReport.match(/```json\s*([\s\S]*?)\s*```/);
-        if (jsonMatch) {
-          try { scores = JSON.parse(jsonMatch[1]); } catch(e){}
-        }
-
-        document.getElementById('resTotalScore').innerText = scores.totalScore;
-        reportContent.innerText = fullReport;
-        evalStatus.innerText = "【3/3】スプレッドシートへ保存中...";
-
-        // GASスプレッドシートへ送信
-        await fetch(GAS_ENDPOINT_URL, {
+        // GASへデータをPOST（Gemini呼び出しはGAS側で実行）
+        const res = await fetch(GAS_ENDPOINT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify({
             name: document.getElementById('studentName').value,
             date: new Date().toLocaleString('ja-JP'),
-            totalScore: scores.totalScore,
-            scoreContent: scores.scoreContent,
-            scoreDelivery: scores.scoreDelivery,
-            scoreExpression: scores.scoreExpression,
-            scoreAccuracy: scores.scoreAccuracy,
             duration: elapsedSec,
             wpm: wpm,
             wordCount: wordCount,
-            report: fullReport
+            script: document.getElementById('scriptText').value,
+            transcript: fullTranscript,
+            videoBase64: base64Video
           })
         });
 
-        evalStatus.innerText = "審査完了・スプレッドシート保存完了！";
-        fetchHistoryData();
+        const data = await res.json();
+
+        if (data.status === "success") {
+          document.getElementById('resTotalScore').innerText = data.scores.totalScore;
+          reportContent.innerText = data.report;
+          evalStatus.innerText = "審査完了・スプレッドシート保存完了！";
+          fetchHistoryData();
+        } else {
+          throw new Error(data.message || "GAS審査エラー");
+        }
 
       } catch (err) {
         evalStatus.innerText = "エラー: " + err.message;
@@ -551,7 +512,6 @@ JSONブロックに続けて、タイムスタンプ付きの講評・改善ア�
       }
     }
 
-    // ダッシュボード描画
     function renderDashboard(history) {
       const tbody = document.getElementById('historyTableBody');
       tbody.innerHTML = "";
@@ -591,7 +551,6 @@ JSONブロックに続けて、タイムスタンプ付きの講評・改善ア�
       updateChart(history);
     }
 
-    // グラフ更新
     function updateChart(history) {
       const ctx = document.getElementById('scoreChart').getContext('2d');
       const labels = history.map((_, i) => `#${i + 1}`);
@@ -644,8 +603,6 @@ JSONブロックに続けて、タイムスタンプ付きの講評・改善ア�
         }
       });
     }
-
-    window.addEventListener('DOMContentLoaded', fetchHistoryData);
   </script>
 </body>
 </html>
