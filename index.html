@@ -170,10 +170,11 @@
       border: 1px solid #e0e0e0;
       border-radius: 4px;
       padding: 12px;
-      height: 95px;
+      min-height: 95px;
+      max-height: 180px;
       overflow-y: auto;
-      font-size: 0.9rem;
-      line-height: 1.5;
+      font-size: 0.92rem;
+      line-height: 1.6;
     }
     .report-box {
       line-height: 1.8;
@@ -183,24 +184,73 @@
       border-radius: 6px;
       border-left: 4px solid var(--primary);
     }
-    /* プログレスバー */
+
+    /* 新しいステップ型＆シマープログレスUI */
     .progress-box {
-      margin: 16px 0;
+      margin: 18px 0;
       display: none;
+      background: #fdfdfd;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 16px;
     }
-    .progress-bar-bg {
+    .step-tracker {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .step-item {
+      font-size: 0.8rem;
+      color: var(--text-sub);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .step-item.active {
+      color: var(--primary);
+      font-weight: bold;
+    }
+    .step-item.completed {
+      color: var(--success);
+    }
+    .shimmer-progress-bar {
       width: 100%;
-      height: 14px;
-      background: #e0e0e0;
-      border-radius: 7px;
+      height: 10px;
+      background: #e8eaed;
+      border-radius: 5px;
       overflow: hidden;
-      margin-top: 8px;
+      position: relative;
     }
-    .progress-bar-fill {
+    .shimmer-fill {
       height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #1a73e8, #34a853);
-      transition: width 0.4s ease-out;
+      width: 100%;
+      background: linear-gradient(90deg, #1a73e8 0%, #34a853 50%, #1a73e8 100%);
+      background-size: 200% 100%;
+      animation: shimmerMove 1.5s infinite linear;
+    }
+    @keyframes shimmerMove {
+      0% { background-position: 100% 0; }
+      100% { background-position: -100% 0; }
+    }
+
+    /* 原稿差分ハイライトのスタイル */
+    .diff-match { color: #202124; }
+    .diff-mismatch {
+      color: #d93025;
+      background-color: #fce8e6;
+      font-weight: bold;
+      padding: 1px 4px;
+      border-radius: 3px;
+      margin: 0 1px;
+    }
+    .diff-omitted {
+      color: #70757a;
+      text-decoration: line-through;
+      background-color: #f1f3f4;
+      padding: 1px 4px;
+      border-radius: 3px;
+      margin: 0 1px;
+      font-size: 0.88em;
     }
 
     /* お手本カード */
@@ -395,8 +445,11 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       <span id="statusIndicator" class="status-badge">停止中</span>
     </div>
 
-    <h3>リアルタイム書き起こし</h3>
-    <div id="liveTranscript" class="transcript-box">「待機モード起動」後、英語で話し始めると自動で文字起こしと計測が開始します...</div>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin: 0;">リアルタイム書き起こし ＆ 原稿差分ハイライト</h3>
+      <span style="font-size:0.78rem; color:var(--text-sub);">※審査完了後に赤字（不一致・誤認識）がハイライトされます</span>
+    </div>
+    <div id="liveTranscript" class="transcript-box" style="margin-top: 6px;">「待機モード起動」後、英語で話し始めると自動で文字起こしと計測が開始します...</div>
   </div>
 
   <!-- 4. 審査結果 -->
@@ -436,14 +489,19 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       </div>
     </div>
 
-    <!-- 審査プログレスバー（改善版：フェーズ連動＆スムーズなイージング） -->
+    <!-- ストレスのない新ステップ型プログレスバー -->
     <div id="progressBox" class="progress-box">
-      <div style="display: flex; justify-content: space-between; font-size: 0.88rem; font-weight: bold; color: var(--primary);">
-        <span id="evalStatus">審査準備中...</span>
-        <span id="progressPercent">0%</span>
+      <div class="step-tracker">
+        <span id="step1" class="step-item active">① 映像エンコード</span>
+        <span id="step2" class="step-item">② AIへ転送</span>
+        <span id="step3" class="step-item">③ 審査委員長解析</span>
+        <span id="step4" class="step-item">④ 講評作成</span>
       </div>
-      <div class="progress-bar-bg">
-        <div id="progressBarFill" class="progress-bar-fill"></div>
+      <div class="shimmer-progress-bar">
+        <div class="shimmer-fill"></div>
+      </div>
+      <div id="evalStatus" style="font-size: 0.88rem; font-weight: bold; color: var(--primary); margin-top: 8px; text-align: center;">
+        審査準備中...
       </div>
     </div>
 
@@ -476,7 +534,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     let timeLeft = TARGET_DURATION;
     let timerInterval = null;
     let speechStartTime = 0;
-    let progressInterval = null;
 
     let lineChartInstance = null;
     let radarChartInstance = null;
@@ -650,17 +707,63 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       });
     }
 
-    // プログレスバーの更新表示
-    function updateProgress(percent, text) {
-      const progressBox = document.getElementById('progressBox');
-      const progressBarFill = document.getElementById('progressBarFill');
-      const progressPercent = document.getElementById('progressPercent');
-      const evalStatus = document.getElementById('evalStatus');
+    // ステップインジケーターの更新
+    function setStep(stepNum, statusText) {
+      document.getElementById('progressBox').style.display = 'block';
+      document.getElementById('evalStatus').innerText = statusText;
 
-      progressBox.style.display = 'block';
-      progressBarFill.style.width = percent + '%';
-      progressPercent.innerText = Math.round(percent) + '%';
-      if (text) evalStatus.innerText = text;
+      for (let i = 1; i <= 4; i++) {
+        const el = document.getElementById(`step${i}`);
+        if (i < stepNum) {
+          el.className = "step-item completed";
+          el.innerText = `✔ ステップ${i}`;
+        } else if (i === stepNum) {
+          el.className = "step-item active";
+        } else {
+          el.className = "step-item";
+        }
+      }
+    }
+
+    // 原稿と音声認識テキストの単語差分ハイライト関数
+    function renderDiffHighlight(originalText, recognizedText) {
+      const cleanTokens = (str) => {
+        return str.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, "")
+                  .toLowerCase()
+                  .split(/\s+/)
+                  .filter(Boolean);
+      };
+
+      const origTokens = cleanTokens(originalText);
+      const recTokens = cleanTokens(recognizedText);
+
+      let html = "<strong>【原稿対比・誤認識チェック】</strong><br>";
+      let origIdx = 0;
+
+      recTokens.forEach((word) => {
+        const targetWord = origTokens[origIdx];
+        if (targetWord && word === targetWord) {
+          html += `<span class="diff-match">${word}</span> `;
+          origIdx++;
+        } else {
+          // 少し先を探して脱落があるか判定
+          const nextMatch = origTokens.slice(origIdx, origIdx + 4).indexOf(word);
+          if (nextMatch > 0) {
+            // 抜かしてしまった単語を打消し線表示
+            for (let k = 0; k < nextMatch; k++) {
+              html += `<span class="diff-omitted">[抜] ${origTokens[origIdx]}</span> `;
+              origIdx++;
+            }
+            html += `<span class="diff-match">${word}</span> `;
+            origIdx++;
+          } else {
+            // 原稿と一致しない単語（誤認識・言い間違い）を赤字表示
+            html += `<span class="diff-mismatch">${word}</span> `;
+          }
+        }
+      });
+
+      return html;
     }
 
     // Google Cloud TTS 経由でお手本音声を再生する関数
@@ -805,32 +908,21 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       reportContent.style.display = 'none';
       reportContent.innerHTML = "";
 
-      // 【プログレスバー改善】停止しないスムーズな進行演出
-      updateProgress(10, "【1/4】録画映像をエンコード中...");
+      // ステップ1: エンコード開始
+      setStep(1, "【ステップ1/4】録画映像を最適化エンコード中...");
 
       try {
         const mimeType = mediaRecorder ? mediaRecorder.mimeType : 'video/webm';
         const videoBlob = new Blob(recordedChunks, { type: mimeType });
         const base64Video = await blobToBase64(videoBlob);
 
-        updateProgress(30, "【2/4】Geminiへ映像・音声データを送信中...");
+        // ステップ2: 送信開始
+        setStep(2, "【ステップ2/4】Gemini審査エンジンへ動画・音声を転送中...");
 
-        let currentProg = 30;
-        if (progressInterval) clearInterval(progressInterval);
-        
-        // 段階的にテキストを変化させつつ、98%まで絶対に停止せず進むイージング
-        progressInterval = setInterval(() => {
-          if (currentProg < 65) {
-            currentProg += 1.8;
-            updateProgress(currentProg, "【3/4】審査委員長AIが動画・姿勢・緩急を精査中...");
-          } else if (currentProg < 88) {
-            currentProg += 0.8;
-            updateProgress(currentProg, "【3/4】沈黙の秒数・セリフ抑揚を音響解析中...");
-          } else if (currentProg < 98) {
-            currentProg += 0.3; // 終盤も微動し続けて止まらない
-            updateProgress(currentProg, "【4/4】本選基準スコア算出＆講評レポートを作成中...");
-          }
-        }, 500);
+        // 3秒後に自動でステップ3へ移行（AI解析フェーズ）
+        setTimeout(() => {
+          setStep(3, "【ステップ3/4】審査委員長AIが動画・所作・緩急・タメを精査中（常時解析中）...");
+        }, 3500);
 
         const res = await fetch(GAS_ENDPOINT_URL, {
           method: 'POST',
@@ -847,11 +939,16 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           })
         });
 
+        // ステップ4: レポート受領＆反映
+        setStep(4, "【ステップ4/4】本選基準スコア算出＆講評レポートを反映中...");
+
         const data = await res.json();
-        clearInterval(progressInterval);
 
         if (data.status === "success") {
-          updateProgress(100, "審査完了！ダッシュボードに反映しました");
+          document.getElementById('evalStatus').innerText = "✔ 審査完了！ダッシュボードに反映しました";
+          for (let i = 1; i <= 4; i++) {
+            document.getElementById(`step${i}`).className = "step-item completed";
+          }
 
           document.getElementById('resTotalScore').innerText = data.scores.totalScore;
           document.getElementById('resScoreAccuracy').innerText = data.scores.scoreAccuracy;
@@ -859,6 +956,10 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           document.getElementById('resScorePause').innerText = data.scores.scorePause;
           document.getElementById('resScoreVoiceTone').innerText = data.scores.scoreVoiceTone;
           document.getElementById('resScorePosture').innerText = data.scores.scorePosture;
+
+          // 原稿差分ハイライトを書き起こしエリアに展開
+          const originalScript = document.getElementById('scriptText').value;
+          liveTranscriptEl.innerHTML = renderDiffHighlight(originalScript, finalFullText);
 
           reportContent.innerHTML = renderReportWithModelButtons(data.report);
           reportContent.style.display = 'block';
@@ -869,8 +970,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         }
 
       } catch (err) {
-        if (progressInterval) clearInterval(progressInterval);
-        updateProgress(0, "エラーが発生しました");
+        setStep(1, "エラーが発生しました");
         reportContent.style.display = 'block';
         reportContent.innerHTML = "詳細エラー: " + err.message;
       }
