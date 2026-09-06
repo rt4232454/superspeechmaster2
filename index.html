@@ -165,17 +165,84 @@
       color: var(--primary);
       font-weight: bold;
     }
+
+    /* 広域差分確認ウィンドウ */
     .transcript-box {
-      background: #f1f3f4;
-      border: 1px solid #e0e0e0;
-      border-radius: 4px;
-      padding: 14px;
-      min-height: 100px;
-      max-height: 220px;
+      background: #ffffff;
+      border: 1.5px solid #d2d6dc;
+      border-radius: 6px;
+      padding: 18px 20px;
+      min-height: 220px;
+      max-height: 480px;
       overflow-y: auto;
-      font-size: 0.95rem;
-      line-height: 1.7;
+      resize: vertical;
+      font-size: 0.98rem;
+      line-height: 1.9;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.04);
+      box-sizing: border-box;
+      width: 100%;
     }
+
+    /* 差分ハイライトのスタイル設計（明瞭な差別化） */
+    .diff-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 0.84rem;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .diff-match {
+      color: #202124;
+    }
+    /* ① 発音されなかった単語（脱落・スキップ）：オレンジ系バッジ */
+    .diff-omitted {
+      color: #b06000;
+      background-color: #fff3e0;
+      border: 1px dashed #f5b041;
+      padding: 2px 7px;
+      border-radius: 4px;
+      margin: 0 3px;
+      display: inline-flex;
+      align-items: center;
+      font-weight: 500;
+      text-decoration: line-through;
+    }
+    .diff-omitted-badge {
+      font-size: 0.72rem;
+      background-color: #f5b041;
+      color: #ffffff;
+      border-radius: 3px;
+      padding: 0 4px;
+      margin-right: 5px;
+      text-decoration: none;
+      display: inline-block;
+      font-weight: bold;
+    }
+    /* ② 誤って検知された単語（言い間違い・誤認識）：レッド系バッジ */
+    .diff-mismatch {
+      color: #c5221f;
+      background-color: #fce8e6;
+      border: 1.5px solid #fad2cf;
+      padding: 2px 7px;
+      border-radius: 4px;
+      margin: 0 3px;
+      display: inline-flex;
+      align-items: center;
+      font-weight: bold;
+    }
+    .diff-mismatch-badge {
+      font-size: 0.72rem;
+      background-color: #ea4335;
+      color: #ffffff;
+      border-radius: 3px;
+      padding: 0 4px;
+      margin-right: 5px;
+      display: inline-block;
+      font-weight: bold;
+    }
+
     .report-box {
       line-height: 1.8;
       font-size: 0.94rem;
@@ -231,27 +298,6 @@
     @keyframes shimmerMove {
       0% { background-position: 100% 0; }
       100% { background-position: -100% 0; }
-    }
-
-    /* 誤認識・脱落単語の赤字ハイライトスタイル */
-    .diff-match { color: #202124; }
-    .diff-mismatch {
-      color: #d93025;
-      background-color: #fce8e6;
-      font-weight: bold;
-      padding: 2px 5px;
-      border-radius: 3px;
-      border: 1px solid #fad2cf;
-      margin: 0 2px;
-    }
-    .diff-omitted {
-      color: #70757a;
-      text-decoration: line-through;
-      background-color: #e8eaed;
-      padding: 2px 5px;
-      border-radius: 3px;
-      margin: 0 2px;
-      font-size: 0.88em;
     }
 
     /* お手本カード */
@@ -446,11 +492,11 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       <span id="statusIndicator" class="status-badge">停止中</span>
     </div>
 
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h3 style="margin: 0;">リアルタイム書き起こし ＆ 発話範囲の差分ハイライト</h3>
-      <span style="font-size:0.78rem; color:var(--danger); font-weight:bold;">※実際に読まれた範囲内のみをAIが審査・赤字判定します</span>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 10px;">
+      <h3 style="margin: 0;">リアルタイム書き起こし ＆ 原稿差分ハイライト</h3>
+      <span style="font-size:0.78rem; color:var(--text-sub);">※右下をドラッグして高さを自由に調節できます</span>
     </div>
-    <div id="liveTranscript" class="transcript-box" style="margin-top: 6px;">「待機モード起動」後、英語で話し始めると自動で文字起こしと計測が開始します...</div>
+    <div id="liveTranscript" class="transcript-box" style="margin-top: 8px;">「待機モード起動」後、英語で話し始めると自動で文字起こしと計測が開始します...</div>
   </div>
 
   <!-- 4. 審査結果 -->
@@ -728,7 +774,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }
     }
 
-    // 【重要】実際に読まれた範囲を原稿から抽出・トリミングする関数
     function extractSpokenRange(fullScript, recognizedText) {
       const cleanWord = (w) => w.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, "").toLowerCase().trim();
       
@@ -739,7 +784,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         return { spokenScript: fullScript, reachIndex: 0, percentage: 0 };
       }
 
-      // 発話の末尾5単語を使って原稿内の到達地点を特定
       let maxMatchIndex = 0;
       let checkTokens = recWords.slice(-6).map(cleanWord);
 
@@ -750,10 +794,8 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         }
       }
 
-      // マッチ地点から少し安全マージンを取って文末（.）を探す
       let cutoffIndex = Math.min(scriptWords.length, maxMatchIndex + 3);
       if (cutoffIndex < scriptWords.length) {
-        // 次のピリオドまで含める
         for (let j = cutoffIndex; j < Math.min(scriptWords.length, cutoffIndex + 8); j++) {
           if (scriptWords[j].includes('.')) {
             cutoffIndex = j + 1;
@@ -774,14 +816,22 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       };
     }
 
-    // 【単語差分ハイライト処理】発話範囲内のみを対象に赤字ハイライト
+    // 【新設】「発音されなかった単語」と「誤って検知された単語」を明確に差別化して描画する関数
     function renderDiffHighlight(targetScript, recognizedText) {
       const cleanWord = (w) => w.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, "").toLowerCase().trim();
 
       const origTokens = targetScript.split(/\s+/).filter(Boolean);
       const recTokens = recognizedText.split(/\s+/).filter(Boolean);
 
-      let html = '<div style="margin-bottom:8px; font-weight:bold; color:var(--primary);">【発話範囲の正確性チェック結果】<span style="font-weight:normal; font-size:0.85rem; color:#d93025; margin-left:8px;">赤字: 誤認識・言い間違い / 取消線: 原稿脱落</span></div>';
+      // 上部に凡例を表示
+      let html = `
+        <div class="diff-legend">
+          <span style="font-weight:bold; color:var(--primary);">【発話正確性の解析結果】</span>
+          <span><span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>word</span> = 原稿から脱落・スキップした単語</span>
+          <span><span class="diff-mismatch"><span class="diff-mismatch-badge">誤検知</span>word</span> = 誤認識・言い間違いの単語</span>
+        </div>
+        <div style="line-height:2.2;">
+      `;
       
       let origIdx = 0;
 
@@ -791,9 +841,11 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         const oClean = cleanWord(oWord);
 
         if (rClean === oClean) {
+          // 正しく発音された単語
           html += `<span class="diff-match">${rWord}</span> `;
           origIdx++;
         } else {
+          // 先の単語を探して、原稿から飛ばされた（発音されなかった）単語があるかを判定
           let matchedAhead = -1;
           for (let k = 1; k <= 4; k++) {
             if (origTokens[origIdx + k] && cleanWord(origTokens[origIdx + k]) === rClean) {
@@ -803,22 +855,30 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           }
 
           if (matchedAhead !== -1) {
+            // 発音されなかった単語（オレンジ系バッジで明示）
             for (let m = 0; m < matchedAhead; m++) {
-              html += `<span class="diff-omitted">${origTokens[origIdx]}</span> `;
+              html += `<span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>${origTokens[origIdx]}</span> `;
               origIdx++;
             }
             html += `<span class="diff-match">${rWord}</span> `;
             origIdx++;
           } else {
-            html += `<span class="diff-mismatch">${rWord}</span> `;
+            // 誤って検知された単語（レッド系バッジで明示）
+            html += `<span class="diff-mismatch"><span class="diff-mismatch-badge">誤検知</span>${rWord}</span> `;
           }
         }
       });
 
+      // 原稿の末尾に残った未発音単語があれば追加
+      while (origIdx < origTokens.length) {
+        html += `<span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>${origTokens[origIdx]}</span> `;
+        origIdx++;
+      }
+
+      html += '</div>';
       return html;
     }
 
-    // Google Cloud TTS 経由でお手本音声を再生する関数
     async function playGoogleTTSModel(text, styleType, btnEl) {
       if (currentPlayingAudio) {
         currentPlayingAudio.pause();
@@ -873,7 +933,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }
     }
 
-    // 単体テスト関数（タメ＋再開フレーズのテスト）
     async function testDirectTTS() {
       const btn = document.getElementById('testAudioBtn');
       const originalText = btn.innerText;
@@ -956,8 +1015,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       const wpm = elapsedMinutes > 0 ? Math.round(wordCount / elapsedMinutes) : 0;
 
       const fullScript = document.getElementById('scriptText').value;
-      
-      // 🚨 発話された範囲の原稿と到達割合を自動判定
       const rangeData = extractSpokenRange(fullScript, finalFullText);
 
       document.getElementById('resultCard').style.display = 'block';
@@ -967,7 +1024,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       reportContent.style.display = 'none';
       reportContent.innerHTML = "";
 
-      // ステップ1
       setStep(1, "【ステップ1/4】録画映像を最適化エンコード中...");
 
       try {
@@ -975,7 +1031,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         const videoBlob = new Blob(recordedChunks, { type: mimeType });
         const base64Video = await blobToBase64(videoBlob);
 
-        // ステップ2
         setStep(2, `【ステップ2/4】発話された区間（到達率${rangeData.percentage}%）をAIへ転送中...`);
 
         setTimeout(() => {
@@ -992,14 +1047,13 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
             wpm: wpm,
             wordCount: wordCount,
             script: fullScript,
-            spokenScript: rangeData.spokenScript, // 読まれた部分の原稿
+            spokenScript: rangeData.spokenScript,
             progressRate: rangeData.percentage,
             transcript: finalFullText,
             videoBase64: base64Video
           })
         });
 
-        // ステップ4
         setStep(4, "【ステップ4/4】本選基準スコア算出＆講評レポートを反映中...");
 
         const data = await res.json();
@@ -1017,7 +1071,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           document.getElementById('resScoreVoiceTone').innerText = data.scores.scoreVoiceTone;
           document.getElementById('resScorePosture').innerText = data.scores.scorePosture;
 
-          // 発話された範囲内だけを対象に差分ハイライト
+          // 視覚的に差別化された差分結果をウィンドウへ描画
           liveTranscriptEl.innerHTML = renderDiffHighlight(rangeData.spokenScript, finalFullText);
 
           reportContent.innerHTML = renderReportWithModelButtons(data.report);
