@@ -154,7 +154,8 @@
     .btn-now:hover { background-color: #2d9249; }
     .btn-stop { background-color: var(--danger); color: #fff; display: none; }
     .btn-stop:hover { background-color: var(--danger-hover); }
-    .btn-secondary { background-color: #5f6368; color: #fff; font-size: 0.85rem; padding: 6px 14px; }
+    .btn-secondary { background-color: #5f6368; color: #fff; font-size: 0.85rem; padding: 10px 16px; }
+    .btn-secondary:hover { background-color: #4b4f54; }
     .timer { font-size: 1.8rem; font-family: Consolas, Monaco, monospace; font-weight: bold; }
     .status-badge {
       font-size: 0.85rem;
@@ -201,13 +202,13 @@
       transition: width 0.3s ease;
     }
 
-    /* お手本音声ボタンスタイル */
+    /* お手本カード */
     .model-audio-card {
       background: #f0f7ff;
       border: 1px solid #c2e0ff;
       border-radius: 6px;
-      padding: 10px 14px;
-      margin: 10px 0;
+      padding: 12px 16px;
+      margin: 12px 0;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -216,22 +217,26 @@
     .model-audio-text {
       font-style: italic;
       color: #1a56b0;
-      font-size: 0.9rem;
+      font-size: 0.92rem;
       flex-grow: 1;
     }
     .btn-play-model {
       background: #1a73e8;
       color: #fff;
-      font-size: 0.82rem;
-      padding: 6px 14px;
+      font-size: 0.85rem;
+      padding: 7px 16px;
       border-radius: 20px;
       white-space: nowrap;
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
     }
     .btn-play-model:hover {
       background: #1557b0;
+    }
+    .btn-play-model.loading {
+      background: #5f6368;
+      cursor: wait;
     }
     .btn-play-model.playing {
       background: #e37400;
@@ -384,6 +389,8 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       <button id="standbyBtn" class="btn-start">待機モード起動（音声検知準備）</button>
       <button id="manualStartBtn" class="btn-now">今すぐ計測開始（手動）</button>
       <button id="stopBtn" class="btn-stop">スピーチ終了・評価</button>
+      <!-- TTS単体動作テスト用ボタン -->
+      <button id="testAudioBtn" type="button" class="btn-secondary" onclick="testDirectTTS()">🔊 TTS音声テスト再生</button>
       <div class="timer" id="timer">04:30</div>
       <span id="statusIndicator" class="status-badge">停止中</span>
     </div>
@@ -473,6 +480,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
     let lineChartInstance = null;
     let radarChartInstance = null;
+    let currentPlayingAudio = null;
 
     window.addEventListener('DOMContentLoaded', fetchHistoryData);
 
@@ -656,79 +664,130 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       if (text) evalStatus.innerText = text;
     }
 
-    // 【新設】お手本音声を再生する関数（演出タイプに応じて抑揚・話速を制御）
-    function playModelAudio(text, styleType, btnEl) {
-      if (!('speechSynthesis' in window)) {
-        alert("お使いのブラウザは音声再生に対応していません。");
-        return;
+    // Google Cloud TTS 経由でお手本音声を再生する関数
+    async function playGoogleTTSModel(text, styleType, btnEl) {
+      if (currentPlayingAudio) {
+        currentPlayingAudio.pause();
+        currentPlayingAudio = null;
       }
 
-      window.speechSynthesis.cancel(); // 前の音声を停止
+      const originalBtnText = btnEl.innerHTML;
+      btnEl.innerText = "音声生成中...";
+      btnEl.classList.add('loading');
 
-      const uttr = new SpeechSynthesisUtterance(text);
-      uttr.lang = 'en-US';
+      try {
+        const res = await fetch(GAS_ENDPOINT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            action: "getTTS",
+            text: text,
+            styleType: styleType
+          })
+        });
 
-      // ネイティブ音声（Google US English等）を優先選択
-      const voices = window.speechSynthesis.getVoices();
-      const usVoice = voices.find(v => v.lang === 'en-US' && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha')));
-      if (usVoice) uttr.voice = usVoice;
+        const data = await res.json();
+        if (data.status === "success" && data.audioBase64) {
+          btnEl.classList.remove('loading');
+          btnEl.innerText = "再生中...";
+          btnEl.classList.add('playing');
 
-      // 演出スタイルに応じたピッチ・スピード制御
-      if (styleType === 'fast') {
-        uttr.rate = 1.25; // 緊迫・焦り
-        uttr.pitch = 1.1;
-      } else if (styleType === 'slow') {
-        uttr.rate = 0.85; // 内省・重み
-        uttr.pitch = 0.95;
-      } else if (styleType === 'warm') {
-        uttr.rate = 0.95; // 穏やか・温かみ
-        uttr.pitch = 1.0;
-      } else if (styleType === 'pause') {
-        uttr.rate = 1.0;
-      } else {
-        uttr.rate = 1.05;
-        uttr.pitch = 1.0;
+          const audioSrc = "data:audio/mp3;base64," + data.audioBase64;
+          currentPlayingAudio = new Audio(audioSrc);
+
+          currentPlayingAudio.onended = () => {
+            btnEl.innerHTML = originalBtnText;
+            btnEl.classList.remove('playing');
+            currentPlayingAudio = null;
+          };
+
+          currentPlayingAudio.onerror = () => {
+            btnEl.innerHTML = originalBtnText;
+            btnEl.classList.remove('playing');
+            currentPlayingAudio = null;
+          };
+
+          await currentPlayingAudio.play();
+
+        } else {
+          throw new Error("音声生成に失敗しました: " + (data.message || "データなし"));
+        }
+      } catch (err) {
+        alert("お手本音声の取得に失敗しました: " + err.message);
+        btnEl.innerHTML = originalBtnText;
+        btnEl.classList.remove('loading');
       }
-
-      const originalBtnText = btnEl.innerText;
-      btnEl.innerText = "再生中...";
-      btnEl.classList.add('playing');
-
-      uttr.onend = () => {
-        btnEl.innerText = originalBtnText;
-        btnEl.classList.remove('playing');
-      };
-
-      uttr.onerror = () => {
-        btnEl.innerText = originalBtnText;
-        btnEl.classList.remove('playing');
-      };
-
-      window.speechSynthesis.speak(uttr);
     }
 
-    // 講評テキスト内の [[MODEL: text | type]] を検出してお手本ボタンHTMLに変換する関数
-    function renderReportWithModelButtons(rawReport) {
-      // 1. 冒頭のJSONブロックを除去
-      let cleaned = rawReport.replace(/```json[\s\S]*?```\s*/i, '').trim();
+    // フロントエンドからのTTS単体テスト関数
+    async function testDirectTTS() {
+      const btn = document.getElementById('testAudioBtn');
+      const originalText = btn.innerText;
+      btn.innerText = "生成中...";
+      btn.disabled = true;
 
-      // 2. 特殊タグ [[MODEL: ... | ...]] をHTMLボタンカードに置換
+      try {
+        const res = await fetch(GAS_ENDPOINT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            action: "getTTS",
+            text: "Go back to your country. All Chinese people are trash.",
+            styleType: "pause"
+          })
+        });
+
+        const data = await res.json();
+        if (data.status === "success" && data.audioBase64) {
+          btn.innerText = "再生中（2秒タメあり）...";
+          const audio = new Audio("data:audio/mp3;base64," + data.audioBase64);
+          audio.onended = () => {
+            btn.innerText = originalText;
+            btn.disabled = false;
+          };
+          audio.onerror = () => {
+            alert("オーディオ再生エラーが発生しました");
+            btn.innerText = originalText;
+            btn.disabled = false;
+          };
+          await audio.play();
+        } else {
+          alert("エラー: " + (data.message || "音声データの取得に失敗しました"));
+          btn.innerText = originalText;
+          btn.disabled = false;
+        }
+      } catch (err) {
+        alert("通信エラー: " + err.message);
+        btn.innerText = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    // レポート内の [[MODEL: text | type]] をボタンカードに置換
+    function renderReportWithModelButtons(rawReport) {
+      let cleaned = rawReport.replace(/```json[\s\S]*?```\s*/i, '').trim();
       const regex = /\[\[MODEL:\s*([\s\S]*?)\s*\|\s*([a-zA-Z]+)\s*\]\]/g;
-      
+
       let html = cleaned.replace(regex, (match, text, type) => {
         const cleanText = text.replace(/"/g, '&quot;').trim();
         const cleanAttr = cleanText.replace(/'/g, "\\'");
+
+        let labelTag = "お手本";
+        if (type === "pause") labelTag = "タメ（2秒沈黙）";
+        if (type === "fast") labelTag = "加速・焦り";
+        if (type === "slow") labelTag = "減速・内省";
+        if (type === "warm") labelTag = "穏やか・温かみ";
+
         return `
           <div class="model-audio-card">
             <span class="model-audio-text">"${cleanText}"</span>
-            <button class="btn-play-model" onclick="playModelAudio('${cleanAttr}', '${type}', this)">
-              🔊 お手本を聞く
+            <button class="btn-play-model" onclick="playGoogleTTSModel('${cleanAttr}', '${type}', this)">
+              🔊 ${labelTag}を聞く
             </button>
           </div>
         `;
       });
 
-      // 改行をbrに変換（簡易Markdown表示）
       html = html.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
       return html;
     }
@@ -791,8 +850,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           document.getElementById('resScorePause').innerText = data.scores.scorePause;
           document.getElementById('resScoreVoiceTone').innerText = data.scores.scoreVoiceTone;
           document.getElementById('resScorePosture').innerText = data.scores.scorePosture;
-          
-          // お手本ボタンを埋め込んだリッチレポートを描画
+
           reportContent.innerHTML = renderReportWithModelButtons(data.report);
           reportContent.style.display = 'block';
 
@@ -853,7 +911,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       const best = Math.max(...history.map(h => h.totalScore));
       document.getElementById('dashBestScore').innerText = best;
       const latest = history[history.length - 1];
-      
+
       document.getElementById('dashLatestWpm').innerText = latest.wpm;
       document.getElementById('dashLatestDuration').innerText = latest.durationFormatted;
 
