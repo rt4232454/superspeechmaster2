@@ -196,7 +196,6 @@
     .diff-match {
       color: #202124;
     }
-    /* ① スキップ・脱落した未発音単語（オレンジ系） */
     .diff-omitted {
       color: #b06000;
       background-color: #fff3e0;
@@ -220,7 +219,6 @@
       display: inline-block;
       font-weight: bold;
     }
-    /* ② 誤って検知された単語（レッド系） */
     .diff-mismatch {
       color: #c5221f;
       background-color: #fce8e6;
@@ -252,7 +250,6 @@
       border-left: 4px solid var(--primary);
     }
 
-    /* ステップ型プログレスバー */
     .progress-box {
       margin: 18px 0;
       display: none;
@@ -300,7 +297,6 @@
       100% { background-position: -100% 0; }
     }
 
-    /* お手本カード */
     .model-audio-card {
       background: #f0f7ff;
       border: 1px solid #c2e0ff;
@@ -494,7 +490,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
     <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 10px;">
       <h3 style="margin: 0;">リアルタイム書き起こし ＆ 原稿差分ハイライト</h3>
-      <span style="font-size:0.78rem; color:var(--text-sub);">※右下をドラッグして高さを自由に調節できます</span>
+      <span style="font-size:0.78rem; color:var(--text-sub);">※タイトル行を除外して本文から照合しています</span>
     </div>
     <div id="liveTranscript" class="transcript-box" style="margin-top: 8px;">「待機モード起動」後、英語で話し始めると自動で文字起こしと計測が開始します...</div>
   </div>
@@ -804,7 +800,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       return contractions[s] || s;
     }
 
-    // 編集距離（レーベンシュタイン距離）の計算
+    // 編集距離
     function levenshteinDistance(a, b) {
       if (!a || !b) return (a || "").length + (b || "").length;
       const matrix = [];
@@ -827,21 +823,18 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       return matrix[b.length][a.length];
     }
 
-    // 寛容な単語一致判定（語尾変化、1〜2文字違いを許容）
+    // 寛容な単語一致判定
     function isFuzzyMatch(w1, w2) {
       const n1 = normalizeToken(w1);
       const n2 = normalizeToken(w2);
       if (!n1 || !n2) return false;
       if (n1 === n2) return true;
 
-      // 短縮形展開の部分一致
       if (n1.includes(n2) || n2.includes(n1)) return true;
 
-      // 語尾変化（-s, -ed, -ing, -ly）の許容
       const stripEndings = (str) => str.replace(/(s|es|ed|ing|ly|d)$/, "");
       if (stripEndings(n1) === stripEndings(n2) && stripEndings(n1).length >= 3) return true;
 
-      // 長さに応じた編集距離の許容（5文字以上なら2文字違いまでOK、3文字以上なら1文字違いまでOK）
       const maxLen = Math.max(n1.length, n2.length);
       const dist = levenshteinDistance(n1, n2);
       if (maxLen >= 6 && dist <= 2) return true;
@@ -850,16 +843,29 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       return false;
     }
 
-    // 頻出する機能語（ストップワード）判定
     const STOP_WORDS = new Set(["the", "a", "an", "to", "of", "in", "and", "or", "for", "on", "at", "by", "with", "from", "i", "it", "my", "we"]);
 
-    // 発話到達地点を原稿から抽出
+    // 【新設】原稿からタイトル行を除外して本文のみを抽出する関数
+    function getBodyScript(rawScript) {
+      const lines = rawScript.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length > 1) {
+        // 1行目が短く（10単語未満）、ピリオドで終わっていない場合はタイトルとみなして除外
+        const firstLineWords = lines[0].split(/\s+/).filter(Boolean);
+        if (firstLineWords.length <= 8 && !lines[0].endsWith('.')) {
+          return lines.slice(1).join('\n');
+        }
+      }
+      return rawScript;
+    }
+
+    // 発話到達地点を原稿から抽出（本文のみ対象）
     function extractSpokenRange(fullScript, recognizedText) {
-      const scriptWords = fullScript.split(/\s+/).filter(Boolean);
+      const bodyScript = getBodyScript(fullScript);
+      const scriptWords = bodyScript.split(/\s+/).filter(Boolean);
       const recWords = recognizedText.split(/\s+/).filter(Boolean);
 
       if (recWords.length === 0) {
-        return { spokenScript: fullScript, reachIndex: 0, percentage: 0 };
+        return { spokenScript: bodyScript, reachIndex: 0, percentage: 0 };
       }
 
       let maxMatchIndex = 0;
@@ -895,14 +901,15 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       };
     }
 
-    // 【ファジー・寛容判定版】差分ハイライト描画エンジン
+    // 差分ハイライト描画エンジン（タイトルを除外した本文で照合）
     function renderDiffHighlight(targetScript, recognizedText) {
-      const origTokens = targetScript.split(/\s+/).filter(Boolean);
+      const bodyTarget = getBodyScript(targetScript);
+      const origTokens = bodyTarget.split(/\s+/).filter(Boolean);
       const recTokens = recognizedText.split(/\s+/).filter(Boolean);
 
       let html = `
         <div class="diff-legend">
-          <span style="font-weight:bold; color:var(--primary);">【発話正確性の解析結果（適度な寛容判定）】</span>
+          <span style="font-weight:bold; color:var(--primary);">【発話正確性の解析結果】</span>
           <span><span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>word</span> = 文中で飛ばされた単語・フレーズ</span>
           <span><span class="diff-mismatch"><span class="diff-mismatch-badge">誤検知</span>word</span> = 発音崩れ・誤認識</span>
         </div>
@@ -916,7 +923,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         const rWord = recTokens[recIdx];
         const oWord = origTokens[origIdx];
 
-        // 1. まず現在位置でファジー一致するかチェック
         if (isFuzzyMatch(oWord, rWord)) {
           html += `<span class="diff-match">${rWord}</span> `;
           origIdx++;
@@ -924,13 +930,11 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           continue;
         }
 
-        // 2. 一致しない場合、前方の原稿を探索（最大20単語先まで）
         let jumpToOrigIdx = -1;
         const maxSearch = Math.min(origTokens.length, origIdx + 20);
 
         for (let k = origIdx + 1; k < maxSearch; k++) {
           if (isFuzzyMatch(origTokens[k], rWord)) {
-            // 単語が機能語（the, a, to等）の場合は、次の単語も一致しているか確認して誤判定防止
             if (STOP_WORDS.has(normalizeToken(rWord))) {
               if (k + 1 < origTokens.length && recIdx + 1 < recTokens.length) {
                 if (isFuzzyMatch(origTokens[k + 1], recTokens[recIdx + 1])) {
@@ -939,7 +943,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
                 }
               }
             } else {
-              // 実質語なら一致として採用
               jumpToOrigIdx = k;
               break;
             }
@@ -947,21 +950,17 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         }
 
         if (jumpToOrigIdx !== -1) {
-          // 飛ばされた間にある原稿単語を【未発音】バッジとして出力
           for (let m = origIdx; m < jumpToOrigIdx; m++) {
             html += `<span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>${origTokens[m]}</span> `;
           }
           origIdx = jumpToOrigIdx;
-          // 一致した単語を出力
           html += `<span class="diff-match">${rWord}</span> `;
           origIdx++;
           recIdx++;
         } else {
-          // 原稿の先にも見つからない場合は、発話側の誤認識として扱う
           html += `<span class="diff-mismatch"><span class="diff-mismatch-badge">誤検知</span>${rWord}</span> `;
           recIdx++;
           
-          // 原稿側も1単語先を見て同期のズレを解消
           if (recIdx < recTokens.length && origIdx + 1 < origTokens.length) {
             if (isFuzzyMatch(origTokens[origIdx + 1], recTokens[recIdx])) {
               html += `<span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>${origTokens[origIdx]}</span> `;
@@ -971,7 +970,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         }
       }
 
-      // 残りの認識テキストがあれば誤検知として出力
       while (recIdx < recTokens.length) {
         html += `<span class="diff-mismatch"><span class="diff-mismatch-badge">誤検知</span>${recTokens[recIdx]}</span> `;
         recIdx++;
@@ -1148,7 +1146,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
             duration: elapsedSec,
             wpm: wpm,
             wordCount: wordCount,
-            script: fullScript,
+            script: getBodyScript(fullScript),
             spokenScript: rangeData.spokenScript,
             progressRate: rangeData.percentage,
             transcript: finalFullText,
@@ -1173,7 +1171,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           document.getElementById('resScoreVoiceTone').innerText = data.scores.scoreVoiceTone;
           document.getElementById('resScorePosture').innerText = data.scores.scorePosture;
 
-          // 寛容判定エンジンによる差分ハイライトを反映
+          // 本文から照合した差分結果を描画
           liveTranscriptEl.innerHTML = renderDiffHighlight(rangeData.spokenScript, finalFullText);
 
           reportContent.innerHTML = renderReportWithModelButtons(data.report);
