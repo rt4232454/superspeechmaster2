@@ -398,8 +398,12 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     let recognition = null;
     let isWaitingForSpeech = false;
     let isSpeechRunning = false;
+    let isManualStop = false;
 
-    let fullTranscript = "";
+    // 重複排除用トランスクリプト管理配列
+    let finalizedSentences = [];
+    let currentInterim = "";
+
     const TARGET_DURATION = 270;
     let timeLeft = TARGET_DURATION;
     let timerInterval = null;
@@ -419,20 +423,44 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       recognition.interimResults = true;
       recognition.maxAlternatives = 1;
 
+      // 【Android重複バグ完全対策ロジック】
       recognition.onresult = (event) => {
-        let interim = "";
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            fullTranscript += event.results[i][0].transcript + " ";
+        let sessionFinal = "";
+        currentInterim = "";
+
+        // 0から全件を走査して最新の状態を再構築（resultIndexに依存しない）
+        for (let i = 0; i < event.results.length; ++i) {
+          const item = event.results[i];
+          const text = item[0].transcript.trim();
+          if (item.isFinal) {
+            sessionFinal += text + " ";
           } else {
-            interim += event.results[i][0].transcript;
+            currentInterim += text + " ";
           }
         }
-        liveTranscriptEl.innerText = (fullTranscript + interim).trim();
+
+        // 確定した文節の重複排除登録
+        if (sessionFinal.trim().length > 0) {
+          const sentences = sessionFinal.trim().split(/\s{2,}/);
+          sentences.forEach(s => {
+            const clean = s.trim();
+            // 直前の文節と完全一致、または末尾にすでに含まれている場合は追加しない
+            if (clean && !finalizedSentences.includes(clean)) {
+              // 重複フレーズの検出（直前と同じなら除外）
+              const last = finalizedSentences[finalizedSentences.length - 1];
+              if (!last || !clean.toLowerCase().includes(last.toLowerCase())) {
+                finalizedSentences.push(clean);
+              }
+            }
+          });
+        }
+
+        const fullDisplay = (finalizedSentences.join(" ") + " " + currentInterim).trim();
+        liveTranscriptEl.innerText = fullDisplay;
         liveTranscriptEl.scrollTop = liveTranscriptEl.scrollHeight;
 
         // 【第一声の検知】待機中に文字が1文字でも入ったら自動で本番開始
-        if (isWaitingForSpeech && (fullTranscript.trim().length > 0 || interim.trim().length > 0)) {
+        if (isWaitingForSpeech && fullDisplay.length > 0) {
           isWaitingForSpeech = false;
           triggerSpeechStart();
         }
@@ -440,29 +468,32 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
       recognition.onerror = (e) => {
         console.warn("SpeechRec error:", e.error);
-        // Android特有のタイムアウト対策：待機中または計測中なら自動で再接続
-        if ((isWaitingForSpeech || isSpeechRunning) && (e.error === 'no-speech' || e.error === 'audio-capture')) {
-          try { recognition.start(); } catch(err){}
+        if (e.error === 'no-speech' || e.error === 'audio-capture') {
+          // Androidでたまに起きるタイムアウトを無視して継続
         }
       };
 
       recognition.onend = () => {
-        // Android Chromeで自動切断された場合のリカバリー
-        if (isWaitingForSpeech || isSpeechRunning) {
-          try { recognition.start(); } catch(err){}
+        // ユーザーが手動で停止を押すまでは、Androidによる意図しない切断を自動で再接続
+        if (!isManualStop && (isWaitingForSpeech || isSpeechRunning)) {
+          try {
+            recognition.start();
+          } catch(err) {}
         }
       };
     } else {
-      alert("お使いのブラウザは音声認識APIに対応していません。Chromeをご利用ください。");
+      alert("お使いのブラウザは音声認識APIに対応していません。Google Chromeをご利用ください。");
     }
 
-    // 待機モードボタン（Androidマイク競合ゼロ設計）
+    // 待機モードボタン
     standbyBtn.onclick = async () => {
-      fullTranscript = "";
+      finalizedSentences = [];
+      currentInterim = "";
+      isManualStop = false;
       liveTranscriptEl.innerText = "準備中... 英語で話し始めると自動で文字起こしと計測が開始します。";
 
       try {
-        // 1. Androidのマイク排他制御を避けるため、ビデオストリームは映像のみ（audio: false）で取得
+        // マイク競合を避けるため、ビデオは映像のみで取得
         stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
           audio: false
@@ -472,7 +503,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         preview.style.display = "block";
         cameraPlaceholder.style.display = "none";
 
-        // コーデック設定
         let options = { mimeType: 'video/webm' };
         if (MediaRecorder.isTypeSupported('video/webm; codecs=vp8')) {
           options = { mimeType: 'video/webm; codecs=vp8' };
@@ -487,12 +517,11 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         };
         mediaRecorder.onstop = handleRecordingComplete;
 
-        // 2. ユーザー操作（タップ）の直後に音声認識エンジンを起動（Androidの権限規制をクリア）
+        // ユーザー操作の直後で音声認識を開始
         if (recognition) {
           try { recognition.start(); } catch(e){}
         }
 
-        // 3. 待機状態へ
         isWaitingForSpeech = true;
         isSpeechRunning = false;
 
@@ -526,7 +555,6 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       statusIndicator.style.background = "#fce8e6";
       statusIndicator.style.color = "var(--danger)";
 
-      // 録画開始
       if (mediaRecorder && mediaRecorder.state === 'inactive') {
         mediaRecorder.start();
       }
@@ -547,6 +575,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     stopBtn.onclick = stopSpeech;
 
     function stopSpeech() {
+      isManualStop = true;
       isWaitingForSpeech = false;
       isSpeechRunning = false;
       clearInterval(timerInterval);
@@ -592,7 +621,10 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     async function handleRecordingComplete() {
       const elapsedSec = Math.round((Date.now() - speechStartTime) / 1000);
       const elapsedMinutes = elapsedSec / 60;
-      const wordCount = fullTranscript.trim().split(/\s+/).filter(Boolean).length;
+
+      // 最終文字起こしテキストの結合（重複を完全排除した状態）
+      const finalFullText = (finalizedSentences.join(" ") + " " + currentInterim).trim();
+      const wordCount = finalFullText.split(/\s+/).filter(Boolean).length;
       const wpm = elapsedMinutes > 0 ? Math.round(wordCount / elapsedMinutes) : 0;
 
       document.getElementById('resultCard').style.display = 'block';
@@ -619,7 +651,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
             wpm: wpm,
             wordCount: wordCount,
             script: document.getElementById('scriptText').value,
-            transcript: fullTranscript,
+            transcript: finalFullText,
             videoBase64: base64Video
           })
         });
