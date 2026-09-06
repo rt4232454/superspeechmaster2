@@ -164,16 +164,28 @@
       color: var(--primary);
       font-weight: bold;
     }
-    /* 音量メーターバー */
-    .meter-container {
+
+    /* 音量メーターと検知ライン */
+    .meter-wrapper {
       width: 100%;
       max-width: 640px;
       margin: 0 auto 12px;
-      background: #e0e0e0;
-      height: 10px;
-      border-radius: 5px;
-      overflow: hidden;
       display: none;
+    }
+    .meter-label-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: var(--text-sub);
+      margin-bottom: 4px;
+    }
+    .meter-container {
+      position: relative;
+      width: 100%;
+      background: #e0e0e0;
+      height: 14px;
+      border-radius: 7px;
+      overflow: hidden;
     }
     .meter-bar {
       width: 0%;
@@ -181,6 +193,17 @@
       background: #34a853;
       transition: width 0.05s ease;
     }
+    /* 開始しきい値ライン（約35%の位置） */
+    .meter-threshold-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 35%;
+      width: 2px;
+      background: #d93025;
+      z-index: 2;
+    }
+
     .transcript-box {
       background: #f1f3f4;
       border: 1px solid #e0e0e0;
@@ -344,9 +367,16 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       <video id="preview" autoplay playsinline muted></video>
     </div>
 
-    <!-- 音量メーター（第一声検知レベルを可視化） -->
-    <div class="meter-container" id="meterContainer">
-      <div class="meter-bar" id="meterBar"></div>
+    <!-- 音量メーター（赤い目標ライン付き） -->
+    <div class="meter-wrapper" id="meterWrapper">
+      <div class="meter-label-row">
+        <span>マイク音量</span>
+        <span>赤線を超えて発声すると自動開始</span>
+      </div>
+      <div class="meter-container">
+        <div class="meter-threshold-line"></div>
+        <div class="meter-bar" id="meterBar"></div>
+      </div>
     </div>
 
     <div class="controls">
@@ -358,7 +388,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     </div>
 
     <h3>リアルタイム書き起こし</h3>
-    <div id="liveTranscript" class="transcript-box">「待機モード起動」後、英語で話し始めると第一声を検知して自動で本番録画とタイマーが開始します...</div>
+    <div id="liveTranscript" class="transcript-box">「待機モード起動」後、マイクに向かって話し始めると自動検知して計測を開始します...</div>
   </div>
 
   <!-- 4. 審査結果 -->
@@ -413,7 +443,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     const timerEl = document.getElementById('timer');
     const statusIndicator = document.getElementById('statusIndicator');
     const liveTranscriptEl = document.getElementById('liveTranscript');
-    const meterContainer = document.getElementById('meterContainer');
+    const meterWrapper = document.getElementById('meterWrapper');
     const meterBar = document.getElementById('meterBar');
 
     let stream = null;
@@ -423,10 +453,12 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     let isWaitingForSpeech = false;
     let isSpeechRunning = false;
 
-    // Web Audio API（音量監視）
+    // Web Audio API
     let audioContext = null;
     let analyser = null;
     let audioAnimationId = null;
+    let standbyStartTime = 0;
+    let consecutiveLoudFrames = 0; // 継続発話カウンター
 
     let fullTranscript = "";
     const TARGET_DURATION = 270;
@@ -439,7 +471,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
     window.addEventListener('DOMContentLoaded', fetchHistoryData);
 
-    // 音声認識（SpeechRecognition）の初期化
+    // 音声認識（SpeechRecognition）
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
@@ -468,12 +500,13 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       };
     }
 
-    // 待機モードボタン（Android完全対応：カメラ＆マイク取得＋Web Audioで音量監視）
+    // 待機モード起動
     standbyBtn.onclick = async () => {
       fullTranscript = "";
       liveTranscriptEl.innerText = "カメラ・マイク接続中...";
 
       try {
+        // 1. カメラ・マイク取得
         stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
           audio: true
@@ -483,7 +516,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         preview.style.display = "block";
         cameraPlaceholder.style.display = "none";
 
-        // コーデック設定
+        // コーデック互換性
         let options = { mimeType: 'video/webm' };
         if (MediaRecorder.isTypeSupported('video/webm; codecs=vp8,opus')) {
           options = { mimeType: 'video/webm; codecs=vp8,opus' };
@@ -498,26 +531,33 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         };
         mediaRecorder.onstop = handleRecordingComplete;
 
-        // Web Audio API でマイクの音量をリアルタイム測定
+        // 2. Web Audio API セットアップ（Android対応: resumeを明示呼出）
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === 'suspended') {
+          await audioContext.resume();
+        }
         const source = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 256;
         source.connect(analyser);
 
+        // 3. 状態移行
         isWaitingForSpeech = true;
         isSpeechRunning = false;
+        standbyStartTime = Date.now(); // タップ音ガードの開始基準
+        consecutiveLoudFrames = 0;
 
         standbyBtn.style.display = 'none';
         manualStartBtn.style.display = 'inline-block';
         stopBtn.style.display = 'inline-block';
-        meterContainer.style.display = 'block';
+        meterWrapper.style.display = 'block';
 
-        statusIndicator.innerText = "声の検知待機中（話し始めると自動開始）";
+        statusIndicator.innerText = "検知待機中（第一声で開始）";
         statusIndicator.style.background = "#fef7e0";
         statusIndicator.style.color = "#b06000";
-        liveTranscriptEl.innerText = "準備完了！第一声を出すと自動で計測が始まります（緑のバーが音量に反応します）。「今すぐ計測開始」を押しても開始できます。";
+        liveTranscriptEl.innerText = "準備完了！英語で話し始めると自動で本番録画が開始します。（※赤線を超える声で自動スタート）";
 
+        // 4. 音量監視ループ開始
         monitorAudioVolume();
 
       } catch (err) {
@@ -525,7 +565,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }
     };
 
-    // 音量監視ループ（第一声を確実に検知）
+    // 音量監視ループ
     function monitorAudioVolume() {
       if (!isWaitingForSpeech || !analyser) return;
 
@@ -538,15 +578,27 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }
       const avg = sum / dataArray.length;
 
-      // 音量メーター更新 (0〜100%)
-      const meterWidth = Math.min(100, Math.round((avg / 80) * 100));
-      meterBar.style.width = meterWidth + "%";
+      // メーター表示更新 (0〜100%)
+      const meterPercent = Math.min(100, Math.round((avg / 80) * 100));
+      meterBar.style.width = meterPercent + "%";
 
-      // 閾値判定: 声を出したと判定（約20〜25以上の音量）
-      if (avg > 22) {
-        isWaitingForSpeech = false;
-        triggerSpeechStart();
+      // 【重要】タップ音・マイク初期化ガード: 開始後800ミリ秒以内は検知を完全無視
+      const elapsedFromStandby = Date.now() - standbyStartTime;
+      if (elapsedFromStandby < 800) {
+        audioAnimationId = requestAnimationFrame(monitorAudioVolume);
         return;
+      }
+
+      // 【重要】持続発声判定: 赤い線（avg > 28）を超える声が3フレーム連続（約0.15秒以上）続いたか
+      if (avg > 28) {
+        consecutiveLoudFrames++;
+        if (consecutiveLoudFrames >= 3) {
+          isWaitingForSpeech = false;
+          triggerSpeechStart();
+          return;
+        }
+      } else {
+        consecutiveLoudFrames = 0; // 一瞬のノイズならリセット
       }
 
       audioAnimationId = requestAnimationFrame(monitorAudioVolume);
@@ -566,7 +618,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       isSpeechRunning = true;
 
       manualStartBtn.style.display = 'none';
-      meterContainer.style.display = 'none';
+      meterWrapper.style.display = 'none';
 
       statusIndicator.innerText = "本番計測中（録画＆音声解析中）";
       statusIndicator.style.background = "#fce8e6";
@@ -626,7 +678,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       cameraPlaceholder.style.display = "block";
       cameraPlaceholder.innerText = "カメラ停止中（AI審査中）";
 
-      meterContainer.style.display = 'none';
+      meterWrapper.style.display = 'none';
       standbyBtn.style.display = 'inline-block';
       manualStartBtn.style.display = 'none';
       stopBtn.style.display = 'none';
