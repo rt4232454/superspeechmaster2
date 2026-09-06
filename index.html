@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>英語弁論大会 表現特化AIコーチ＆ダッシュボード</title>
+  <title>英語弁論大会 表現＆正確性 特化AIコーチ</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
@@ -128,7 +128,7 @@
     .metrics-summary {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-      gap: 12px;
+      gap: 10px;
       margin-bottom: 16px;
     }
     .metric-card {
@@ -138,8 +138,8 @@
       text-align: center;
       border: 1px solid #e8eaed;
     }
-    .metric-value { font-size: 1.3rem; font-weight: bold; color: var(--primary); }
-    .metric-label { font-size: 0.78rem; color: var(--text-sub); margin-top: 2px; }
+    .metric-value { font-size: 1.25rem; font-weight: bold; color: var(--primary); }
+    .metric-label { font-size: 0.76rem; color: var(--text-sub); margin-top: 2px; }
     .charts-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -163,21 +163,23 @@
 </head>
 <body>
 
-  <h1>英語弁論大会 表現特化AIコーチ＆ダッシュボード</h1>
+  <h1>英語弁論大会 表現＆正確性 特化AIコーチ</h1>
 
   <div class="check-box-container">
-    <strong>本選特化・集中評価ポイント:</strong>
+    <strong>本選審査 5大フォーカスポイント（各20点 / 100点満点）:</strong>
     <ul>
-      <li><strong>話速の緩急:</strong> 電車の焦る描写（130 WPM超）⇄ 内省・韓さんの言葉（100 WPM付近）</li>
-      <li><strong>無音のタメ:</strong> 冒頭の引用後（2秒停止）＆ 結びの問いかけ前（2秒停止）</li>
+      <li><strong>単語の正確性:</strong> 原稿からの言い飛ばし・抜け漏れ・発音ミスがないか精査</li>
+      <li><strong>話速の緩急:</strong> 焦る電車の描写（130 WPM超）⇄ 内省・韓さんの言葉（100 WPM付近）</li>
+      <li><strong>無音のタメ:</strong> 冒頭引用直後（しっかり2秒静止）＆ 結び問いかけ前（2秒静止）</li>
       <li><strong>セリフの演じ分け:</strong> 引用・電車の女性・韓さんの発話時のトーン＆視線の変化</li>
       <li><strong>所作の安定:</strong> 手のホームポジション（みぞおちキープ）と決めのジェスチャー</li>
     </ul>
   </div>
 
+  <!-- 1. 進捗ダッシュボード -->
   <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center;">
-      <h2>4観点パフォーマンス推移</h2>
+      <h2>5観点パフォーマンス推移</h2>
       <button class="btn-secondary" onclick="fetchHistoryData()">データを再読込</button>
     </div>
 
@@ -201,10 +203,10 @@
     </div>
 
     <div class="charts-grid">
-      <div style="height: 250px; background: #fff; padding: 8px; border: 1px solid #eee; border-radius: 6px;">
+      <div style="height: 260px; background: #fff; padding: 8px; border: 1px solid #eee; border-radius: 6px;">
         <canvas id="scoreLineChart"></canvas>
       </div>
-      <div style="height: 250px; background: #fff; padding: 8px; border: 1px solid #eee; border-radius: 6px;">
+      <div style="height: 260px; background: #fff; padding: 8px; border: 1px solid #eee; border-radius: 6px;">
         <canvas id="scoreRadarChart"></canvas>
       </div>
     </div>
@@ -215,8 +217,9 @@
           <tr>
             <th>日時</th>
             <th>総合点</th>
+            <th>単語正確性</th>
             <th>話速の緩急</th>
-            <th>無音のタメ</th>
+            <th>無音タメ</th>
             <th>セリフ表現</th>
             <th>所作・手位置</th>
             <th>時間</th>
@@ -224,12 +227,13 @@
           </tr>
         </thead>
         <tbody id="historyTableBody">
-          <tr><td colspan="8">データを読み込み中...</td></tr>
+          <tr><td colspan="9">データを読み込み中...</td></tr>
         </tbody>
       </table>
     </div>
   </div>
 
+  <!-- 2. 設定・原稿 -->
   <div class="card">
     <h2>練習設定・スピーチ原稿</h2>
     <div class="form-group">
@@ -254,6 +258,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     </div>
   </div>
 
+  <!-- 3. 録画測定 -->
   <div class="card">
     <h2>スピーチ測定・練習開始</h2>
     <div class="video-container" id="videoContainer">
@@ -272,8 +277,9 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     <div id="liveTranscript" class="transcript-box">「待機モード起動」後、マイクに向かって話し始めると自動検知して開始します...</div>
   </div>
 
+  <!-- 4. 審査結果 -->
   <div id="resultCard" class="card" style="display: none;">
-    <h2>最新AI審査レポート（4観点特化採点）</h2>
+    <h2>最新AI審査レポート（5観点特化採点）</h2>
     
     <div class="metrics-summary">
       <div class="metric-card">
@@ -281,20 +287,24 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         <div class="metric-label">総合スコア (100点)</div>
       </div>
       <div class="metric-card">
+        <div class="metric-value" id="resScoreAccuracy">-</div>
+        <div class="metric-label">単語正確性 (20点)</div>
+      </div>
+      <div class="metric-card">
         <div class="metric-value" id="resScorePacing">-</div>
-        <div class="metric-label">緩急の落差 (25点)</div>
+        <div class="metric-label">緩急の落差 (20点)</div>
       </div>
       <div class="metric-card">
         <div class="metric-value" id="resScorePause">-</div>
-        <div class="metric-label">無音のタメ (25点)</div>
+        <div class="metric-label">無音のタメ (20点)</div>
       </div>
       <div class="metric-card">
         <div class="metric-value" id="resScoreVoiceTone">-</div>
-        <div class="metric-label">セリフ表現 (25点)</div>
+        <div class="metric-label">セリフ表現 (20点)</div>
       </div>
       <div class="metric-card">
         <div class="metric-value" id="resScorePosture">-</div>
-        <div class="metric-label">所作・手位置 (25点)</div>
+        <div class="metric-label">所作・手位置 (20点)</div>
       </div>
     </div>
 
@@ -482,7 +492,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
         const base64Video = await blobToBase64(videoBlob);
 
-        evalStatus.innerText = "【2/2】4観点（緩急・タメ・セリフ・所作）をAI審査中（約30〜45秒）...";
+        evalStatus.innerText = "【2/2】単語の抜け漏れ・表現4観点をAI審査中（約30〜45秒）...";
 
         const res = await fetch(GAS_ENDPOINT_URL, {
           method: 'POST',
@@ -503,6 +513,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
         if (data.status === "success") {
           document.getElementById('resTotalScore').innerText = data.scores.totalScore;
+          document.getElementById('resScoreAccuracy').innerText = data.scores.scoreAccuracy;
           document.getElementById('resScorePacing').innerText = data.scores.scorePacing;
           document.getElementById('resScorePause').innerText = data.scores.scorePause;
           document.getElementById('resScoreVoiceTone').innerText = data.scores.scoreVoiceTone;
@@ -524,7 +535,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     async function fetchHistoryData() {
       const studentName = document.getElementById('studentName').value.trim();
       const tbody = document.getElementById('historyTableBody');
-      tbody.innerHTML = '<tr><td colspan="8">最新データを読み込み中...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9">最新データを読み込み中...</td></tr>';
 
       try {
         const url = `${GAS_ENDPOINT_URL}?studentName=${encodeURIComponent(studentName)}`;
@@ -534,10 +545,10 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         if (data.status === "success" && data.history) {
           renderDashboard(data.history);
         } else {
-          tbody.innerHTML = '<tr><td colspan="8">練習データがまだありません。</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9">練習データがまだありません。</td></tr>';
         }
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="8">データ取得エラー: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9">データ取得エラー: ${err.message}</td></tr>`;
       }
     }
 
@@ -546,7 +557,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       tbody.innerHTML = "";
 
       if (history.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8">練習データがまだありません。</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9">練習データがまだありません。</td></tr>';
         document.getElementById('dashTotalAttempts').innerText = "0";
         document.getElementById('dashBestScore').innerText = "0";
         document.getElementById('dashLatestWpm').innerText = "0";
@@ -567,6 +578,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         tr.innerHTML = `
           <td>${row.date}</td>
           <td><strong>${row.totalScore}</strong></td>
+          <td>${row.scoreAccuracy || '-'}</td>
           <td>${row.scorePacing || '-'}</td>
           <td>${row.scorePause || '-'}</td>
           <td>${row.scoreVoiceTone || '-'}</td>
@@ -583,10 +595,10 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     function updateCharts(history) {
       const labels = history.map((_, i) => `#${i + 1}`);
       const totalScores = history.map(h => h.totalScore);
+      const accuracyScores = history.map(h => h.scoreAccuracy || 0);
       const pacingScores = history.map(h => h.scorePacing || 0);
-      const pauseScores = history.map(h => h.scorePause || 0);
 
-      // 折れ線グラフ
+      // 折れ線グラフ（総合点・正確性・緩急）
       const ctxLine = document.getElementById('scoreLineChart').getContext('2d');
       if (lineChartInstance) lineChartInstance.destroy();
       lineChartInstance = new Chart(ctxLine, {
@@ -604,16 +616,16 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
               fill: true
             },
             {
-              label: '話速の緩急(25点)',
-              data: pacingScores,
-              borderColor: '#34a853',
+              label: '単語正確性(20点)',
+              data: accuracyScores,
+              borderColor: '#ea4335',
               borderWidth: 2,
               tension: 0.2
             },
             {
-              label: '無音のタメ(25点)',
-              data: pauseScores,
-              borderColor: '#fbbc04',
+              label: '話速の緩急(20点)',
+              data: pacingScores,
+              borderColor: '#34a853',
               borderWidth: 2,
               tension: 0.2
             }
@@ -626,17 +638,18 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         }
       });
 
-      // レーダーチャート（最新回の4観点バランス）
+      // レーダーチャート（最新回の5観点バランス）
       const latest = history[history.length - 1];
       const ctxRadar = document.getElementById('scoreRadarChart').getContext('2d');
       if (radarChartInstance) radarChartInstance.destroy();
       radarChartInstance = new Chart(ctxRadar, {
         type: 'radar',
         data: {
-          labels: ['話速の緩急', '無音のタメ', 'セリフ表現', '所作・手位置'],
+          labels: ['単語正確性', '話速の緩急', '無音のタメ', 'セリフ表現', '所作・手位置'],
           datasets: [{
-            label: '最新回バランス (各25点満点)',
+            label: '最新回バランス (各20点満点)',
             data: [
+              latest.scoreAccuracy || 0,
               latest.scorePacing || 0,
               latest.scorePause || 0,
               latest.scoreVoiceTone || 0,
@@ -654,8 +667,8 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           scales: {
             r: {
               suggestedMin: 0,
-              suggestedMax: 25,
-              ticks: { stepSize: 5 }
+              suggestedMax: 20,
+              ticks: { stepSize: 4 }
             }
           }
         }
