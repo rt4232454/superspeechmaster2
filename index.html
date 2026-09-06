@@ -336,7 +336,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     </div>
 
     <h3>リアルタイム書き起こし</h3>
-    <div id="liveTranscript" class="transcript-box">「待機モード起動」後、マイクに向かって英語を話し始めると自動で文字起こしと計測がスタートします...</div>
+    <div id="liveTranscript" class="transcript-box">「待機モード起動」後、英語で話し始めると自動で文字起こしと計測が開始します...</div>
   </div>
 
   <!-- 4. 審査結果 -->
@@ -400,9 +400,8 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
     let isSpeechRunning = false;
     let isManualStop = false;
 
-    // 重複排除用トランスクリプト管理配列
-    let finalizedSentences = [];
-    let currentInterim = "";
+    // 軽量・安定化されたトランスクリプト保持
+    let accumulatedText = "";
 
     const TARGET_DURATION = 270;
     let timeLeft = TARGET_DURATION;
@@ -414,53 +413,29 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
     window.addEventListener('DOMContentLoaded', fetchHistoryData);
 
-    // 音声認識エンジンの初期化
+    // 音声認識エンジンの初期化（高感度・Android最適化）
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
       recognition.lang = 'en-US';
       recognition.continuous = true;
-      recognition.interimResults = true;
+      // Androidの処理落ちを防ぐためinterimResultsを抑制し、確定文字列を即座に結合
+      recognition.interimResults = false;
       recognition.maxAlternatives = 1;
 
-      // 【Android重複バグ完全対策ロジック】
       recognition.onresult = (event) => {
-        let sessionFinal = "";
-        currentInterim = "";
-
-        // 0から全件を走査して最新の状態を再構築（resultIndexに依存しない）
-        for (let i = 0; i < event.results.length; ++i) {
-          const item = event.results[i];
-          const text = item[0].transcript.trim();
-          if (item.isFinal) {
-            sessionFinal += text + " ";
-          } else {
-            currentInterim += text + " ";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const text = event.results[i][0].transcript.trim();
+          if (text) {
+            accumulatedText += (accumulatedText ? " " : "") + text;
           }
         }
 
-        // 確定した文節の重複排除登録
-        if (sessionFinal.trim().length > 0) {
-          const sentences = sessionFinal.trim().split(/\s{2,}/);
-          sentences.forEach(s => {
-            const clean = s.trim();
-            // 直前の文節と完全一致、または末尾にすでに含まれている場合は追加しない
-            if (clean && !finalizedSentences.includes(clean)) {
-              // 重複フレーズの検出（直前と同じなら除外）
-              const last = finalizedSentences[finalizedSentences.length - 1];
-              if (!last || !clean.toLowerCase().includes(last.toLowerCase())) {
-                finalizedSentences.push(clean);
-              }
-            }
-          });
-        }
-
-        const fullDisplay = (finalizedSentences.join(" ") + " " + currentInterim).trim();
-        liveTranscriptEl.innerText = fullDisplay;
+        liveTranscriptEl.innerText = accumulatedText;
         liveTranscriptEl.scrollTop = liveTranscriptEl.scrollHeight;
 
-        // 【第一声の検知】待機中に文字が1文字でも入ったら自動で本番開始
-        if (isWaitingForSpeech && fullDisplay.length > 0) {
+        // 待機中に最初の単語が入った瞬間に本番開始
+        if (isWaitingForSpeech && accumulatedText.length > 0) {
           isWaitingForSpeech = false;
           triggerSpeechStart();
         }
@@ -468,13 +443,10 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
       recognition.onerror = (e) => {
         console.warn("SpeechRec error:", e.error);
-        if (e.error === 'no-speech' || e.error === 'audio-capture') {
-          // Androidでたまに起きるタイムアウトを無視して継続
-        }
       };
 
       recognition.onend = () => {
-        // ユーザーが手動で停止を押すまでは、Androidによる意図しない切断を自動で再接続
+        // Android特有の沈黙による切断を即座に再接続（フリーズ防止）
         if (!isManualStop && (isWaitingForSpeech || isSpeechRunning)) {
           try {
             recognition.start();
@@ -487,13 +459,12 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
 
     // 待機モードボタン
     standbyBtn.onclick = async () => {
-      finalizedSentences = [];
-      currentInterim = "";
+      accumulatedText = "";
       isManualStop = false;
-      liveTranscriptEl.innerText = "準備中... 英語で話し始めると自動で文字起こしと計測が開始します。";
+      liveTranscriptEl.innerText = "マイクスタンバイ完了。英語で話し始めてください...";
 
       try {
-        // マイク競合を避けるため、ビデオは映像のみで取得
+        // カメラ映像のみを取得（マイクの奪い合いを完全遮断して認識エンジンに全権委譲）
         stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
           audio: false
@@ -517,7 +488,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         };
         mediaRecorder.onstop = handleRecordingComplete;
 
-        // ユーザー操作の直後で音声認識を開始
+        // タップ直後の同期コンテキストで音声認識をスタート
         if (recognition) {
           try { recognition.start(); } catch(e){}
         }
@@ -529,7 +500,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
         manualStartBtn.style.display = 'inline-block';
         stopBtn.style.display = 'inline-block';
 
-        statusIndicator.innerText = "第一声 検知待機中（話し始めると開始）";
+        statusIndicator.innerText = "検知待機中（話し始めると開始）";
         statusIndicator.style.background = "#fef7e0";
         statusIndicator.style.color = "#b06000";
 
@@ -551,7 +522,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       isSpeechRunning = true;
 
       manualStartBtn.style.display = 'none';
-      statusIndicator.innerText = "本番計測中（録画＆文字起こし中）";
+      statusIndicator.innerText = "本番計測中（録画＆文字認識中）";
       statusIndicator.style.background = "#fce8e6";
       statusIndicator.style.color = "var(--danger)";
 
@@ -622,8 +593,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       const elapsedSec = Math.round((Date.now() - speechStartTime) / 1000);
       const elapsedMinutes = elapsedSec / 60;
 
-      // 最終文字起こしテキストの結合（重複を完全排除した状態）
-      const finalFullText = (finalizedSentences.join(" ") + " " + currentInterim).trim();
+      const finalFullText = accumulatedText.trim();
       const wordCount = finalFullText.split(/\s+/).filter(Boolean).length;
       const wpm = elapsedMinutes > 0 ? Math.round(wordCount / elapsedMinutes) : 0;
 
