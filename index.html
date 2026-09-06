@@ -183,7 +183,7 @@
       width: 100%;
     }
 
-    /* 差分ハイライトのスタイル設計（明瞭な差別化） */
+    /* 差分ハイライトのスタイル設計 */
     .diff-legend {
       display: flex;
       flex-wrap: wrap;
@@ -196,14 +196,14 @@
     .diff-match {
       color: #202124;
     }
-    /* ① 発音されなかった単語（脱落・スキップ）：オレンジ系バッジ */
+    /* ① スキップ・脱落した未発音単語（オレンジ系） */
     .diff-omitted {
       color: #b06000;
       background-color: #fff3e0;
       border: 1px dashed #f5b041;
       padding: 2px 7px;
       border-radius: 4px;
-      margin: 0 3px;
+      margin: 2px 3px;
       display: inline-flex;
       align-items: center;
       font-weight: 500;
@@ -220,14 +220,14 @@
       display: inline-block;
       font-weight: bold;
     }
-    /* ② 誤って検知された単語（言い間違い・誤認識）：レッド系バッジ */
+    /* ② 誤って検知された単語（レッド系） */
     .diff-mismatch {
       color: #c5221f;
       background-color: #fce8e6;
       border: 1.5px solid #fad2cf;
       padding: 2px 7px;
       border-radius: 4px;
-      margin: 0 3px;
+      margin: 2px 3px;
       display: inline-flex;
       align-items: center;
       font-weight: bold;
@@ -774,9 +774,12 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       }
     }
 
+    function cleanWord(w) {
+      return (w || "").replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, "").toLowerCase().trim();
+    }
+
+    // 発話到達地点を原稿から抽出
     function extractSpokenRange(fullScript, recognizedText) {
-      const cleanWord = (w) => w.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, "").toLowerCase().trim();
-      
       const scriptWords = fullScript.split(/\s+/).filter(Boolean);
       const recWords = recognizedText.split(/\s+/).filter(Boolean);
 
@@ -816,63 +819,82 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
       };
     }
 
-    // 【新設】「発音されなかった単語」と「誤って検知された単語」を明確に差別化して描画する関数
+    // 【新設】フレーズ単位の丸ごとスキップも確実に拾い上げる差分アライメントエンジン
     function renderDiffHighlight(targetScript, recognizedText) {
-      const cleanWord = (w) => w.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, "").toLowerCase().trim();
-
       const origTokens = targetScript.split(/\s+/).filter(Boolean);
       const recTokens = recognizedText.split(/\s+/).filter(Boolean);
 
-      // 上部に凡例を表示
       let html = `
         <div class="diff-legend">
           <span style="font-weight:bold; color:var(--primary);">【発話正確性の解析結果】</span>
-          <span><span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>word</span> = 原稿から脱落・スキップした単語</span>
-          <span><span class="diff-mismatch"><span class="diff-mismatch-badge">誤検知</span>word</span> = 誤認識・言い間違いの単語</span>
+          <span><span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>word</span> = スキップ・脱落した単語（文・フレーズ）</span>
+          <span><span class="diff-mismatch"><span class="diff-mismatch-badge">誤検知</span>word</span> = 誤認識・言い間違い</span>
         </div>
         <div style="line-height:2.2;">
       `;
-      
-      let origIdx = 0;
 
-      recTokens.forEach((rWord) => {
+      let origIdx = 0;
+      let recIdx = 0;
+
+      // 原稿と発話の双方を進めながらアライメントを行う
+      while (recIdx < recTokens.length && origIdx < origTokens.length) {
+        const rWord = recTokens[recIdx];
         const rClean = cleanWord(rWord);
-        const oWord = origTokens[origIdx] || "";
+        const oWord = origTokens[origIdx];
         const oClean = cleanWord(oWord);
 
         if (rClean === oClean) {
-          // 正しく発音された単語
+          // 完全一致
           html += `<span class="diff-match">${rWord}</span> `;
           origIdx++;
+          recIdx++;
         } else {
-          // 先の単語を探して、原稿から飛ばされた（発音されなかった）単語があるかを判定
-          let matchedAhead = -1;
-          for (let k = 1; k <= 4; k++) {
-            if (origTokens[origIdx + k] && cleanWord(origTokens[origIdx + k]) === rClean) {
-              matchedAhead = k;
-              break;
+          // 先の原稿（最大25単語先まで：長文フレーズ・1文丸ごとスキップに対応）を探索
+          let foundAheadAt = -1;
+          const searchLimit = Math.min(origTokens.length, origIdx + 25);
+          
+          for (let k = origIdx + 1; k < searchLimit; k++) {
+            if (cleanWord(origTokens[k]) === rClean) {
+              // 連続一致の確証（次の単語も合致しているか）をチェックして誤爆を防止
+              if (k + 1 < origTokens.length && recIdx + 1 < recTokens.length) {
+                if (cleanWord(origTokens[k + 1]) === cleanWord(recTokens[recIdx + 1])) {
+                  foundAheadAt = k;
+                  break;
+                }
+              }
+              if (foundAheadAt === -1) foundAheadAt = k;
             }
           }
 
-          if (matchedAhead !== -1) {
-            // 発音されなかった単語（オレンジ系バッジで明示）
-            for (let m = 0; m < matchedAhead; m++) {
-              html += `<span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>${origTokens[origIdx]}</span> `;
-              origIdx++;
+          if (foundAheadAt !== -1) {
+            // フレーズまたは単語が丸ごと飛ばされたことを検知！
+            // 飛ばされた区間の原稿単語をすべて【未発音】バッジとして出力
+            for (let m = origIdx; m < foundAheadAt; m++) {
+              html += `<span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>${origTokens[m]}</span> `;
             }
+            origIdx = foundAheadAt;
+            // スキップ直後の合致単語を出力
             html += `<span class="diff-match">${rWord}</span> `;
             origIdx++;
+            recIdx++;
           } else {
-            // 誤って検知された単語（レッド系バッジで明示）
+            // 原稿の先にも見つからない場合は、発音の崩れ・誤認識と判定
             html += `<span class="diff-mismatch"><span class="diff-mismatch-badge">誤検知</span>${rWord}</span> `;
+            recIdx++;
+            // 軽微なズレの場合、原稿側も1単語進める
+            if (recIdx < recTokens.length && origIdx + 1 < origTokens.length) {
+              if (cleanWord(recTokens[recIdx]) === cleanWord(origTokens[origIdx + 1])) {
+                origIdx++;
+              }
+            }
           }
         }
-      });
+      }
 
-      // 原稿の末尾に残った未発音単語があれば追加
-      while (origIdx < origTokens.length) {
-        html += `<span class="diff-omitted"><span class="diff-omitted-badge">未発音</span>${origTokens[origIdx]}</span> `;
-        origIdx++;
+      // 残りの発話テキスト（認識された語）があれば出力
+      while (recIdx < recTokens.length) {
+        html += `<span class="diff-mismatch"><span class="diff-mismatch-badge">誤検知</span>${recTokens[recIdx]}</span> `;
+        recIdx++;
       }
 
       html += '</div>';
@@ -1071,7 +1093,7 @@ Now, let me ask you. Will you keep looking at the cropped images? Or will you lo
           document.getElementById('resScoreVoiceTone').innerText = data.scores.scoreVoiceTone;
           document.getElementById('resScorePosture').innerText = data.scores.scorePosture;
 
-          // 視覚的に差別化された差分結果をウィンドウへ描画
+          // フレーズスキップに対応した差分描画を反映
           liveTranscriptEl.innerHTML = renderDiffHighlight(rangeData.spokenScript, finalFullText);
 
           reportContent.innerHTML = renderReportWithModelButtons(data.report);
